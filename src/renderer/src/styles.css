@@ -783,3 +783,56 @@ fieldset.field {
   color: var(--muted);
   padding: 4px 8px;
 }
+
+/* ---------- 프리셋 ---------- */
+
+.preset-bar {
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.preset-bar__row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.preset-bar select,
+.preset-bar input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.preset-bar__row .link {
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.preset-bar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.preset-bar__save {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.preset-bar__save button {
+  padding: 4px 10px;
+}
+
+.link--danger {
+  color: var(--danger) !important;
+}

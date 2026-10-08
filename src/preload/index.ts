@@ -27,7 +27,12 @@ const api: RendererApi = {
   pathForFile: (file) => webUtils.getPathForFile(file),
   listUserFonts: () => ipcRenderer.invoke(IpcChannels.listUserFonts),
   addUserFonts: () => ipcRenderer.invoke(IpcChannels.addUserFonts),
-  removeUserFont: (id) => ipcRenderer.invoke(IpcChannels.removeUserFont, id)
+  removeUserFont: (id) => ipcRenderer.invoke(IpcChannels.removeUserFont, id),
+  listPresets: () => ipcRenderer.invoke(IpcChannels.listPresets),
+  savePreset: (name, settings) => ipcRenderer.invoke(IpcChannels.savePreset, name, settings),
+  removePreset: (id) => ipcRenderer.invoke(IpcChannels.removePreset, id),
+  exportPreset: (name, settings) => ipcRenderer.invoke(IpcChannels.exportPreset, name, settings),
+  importPreset: () => ipcRenderer.invoke(IpcChannels.importPreset)
 }
 
 contextBridge.exposeInMainWorld('api', api)

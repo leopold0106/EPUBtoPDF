@@ -8,6 +8,7 @@ import { computeTypography, validateSettings } from '@shared/typography'
 import { ImagePanel } from './components/ImagePanel'
 import { PreviewPane } from './components/PreviewPane'
 import { FontExtras } from './components/FontExtras'
+import { PresetBar } from './components/PresetBar'
 import { SettingsPanel } from './components/SettingsPanel'
 import { useFonts } from './hooks/useFonts'
 import { usePreview } from './hooks/usePreview'
@@ -279,6 +280,7 @@ export default function App(): React.JSX.Element {
                 onChange={update}
                 onReset={() => replace(DEFAULT_SETTINGS)}
                 fontNames={fontNames}
+                header={<PresetBar settings={settings} onApply={replace} />}
                 fontExtras={
                   <FontExtras
                     family={settings.font.family}

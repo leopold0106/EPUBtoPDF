@@ -11,6 +11,7 @@ import { EPUB_SCHEME, handleResourceRequest } from './epub/protocol'
 import { fontRegistry, registerFontIpc } from './fonts'
 import { handleFontRequest } from './fonts/registry'
 import { findEpubArg } from './launch'
+import { registerPresetIpc } from './presets'
 import { registerSettingsIpc } from './settings'
 
 // 앱이 준비되기 전에 등록해야 한다. standard로 등록해야 문서 안의 상대 경로가 동작한다.
@@ -123,6 +124,7 @@ app.whenReady().then(async () => {
   registerConvertIpc()
   registerSettingsIpc()
   registerFontIpc()
+  registerPresetIpc()
   createMainWindow()
 
   app.on('activate', () => {

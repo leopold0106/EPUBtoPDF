@@ -3,6 +3,7 @@
 import type { BookSummary } from './book'
 import type { BookEdits } from './edits'
 import type { UserFont } from './fonts'
+import type { UserPreset } from './presets'
 import type { ImageInfo } from './render'
 import type { Settings } from './settings'
 
@@ -23,7 +24,12 @@ export const IpcChannels = {
   openRequest: 'book:open-request',
   listUserFonts: 'fonts:list',
   addUserFonts: 'fonts:add',
-  removeUserFont: 'fonts:remove'
+  removeUserFont: 'fonts:remove',
+  listPresets: 'presets:list',
+  savePreset: 'presets:save',
+  removePreset: 'presets:remove',
+  exportPreset: 'presets:export',
+  importPreset: 'presets:import'
 } as const
 
 export interface AppInfo {
@@ -94,4 +100,12 @@ export interface RendererApi {
   /** 파일 선택 창을 띄워 글꼴을 추가한다. 취소하면 null. */
   addUserFonts(): Promise<{ added: UserFont[]; failed: { fileName: string; reason: string }[] } | null>
   removeUserFont(id: string): Promise<void>
+  listPresets(): Promise<UserPreset[]>
+  /** 같은 이름의 프리셋이 있으면 덮어쓴다. */
+  savePreset(name: string, settings: Settings): Promise<UserPreset>
+  removePreset(id: string): Promise<void>
+  /** 파일로 내보낸다. 저장한 경로를 돌려주고, 취소하면 null. */
+  exportPreset(name: string, settings: Settings): Promise<Result<string> | null>
+  /** 파일에서 가져와 내 프리셋에 더한다. 취소하면 null. */
+  importPreset(): Promise<Result<UserPreset> | null>
 }
