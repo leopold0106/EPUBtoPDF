@@ -16,9 +16,11 @@ import { decodeText } from '@shared/text'
 import { assembleBook, listImages as findImages, waitForResources } from '../render/assemble'
 import { typeset } from '../render/typeset'
 
-function readChapters(chapters: AssembleChapter[]): Promise<string[]> {
+function readChapters(chapters: AssembleChapter[], overrides: Record<number, string> = {}): Promise<string[]> {
   return Promise.all(
     chapters.map(async (c) => {
+      // 본문을 고친 장은 고친 문서를 쓴다.
+      if (overrides[c.index] !== undefined) return overrides[c.index]!
       const res = await fetch(c.url)
       if (!res.ok) throw new Error(`${decodeURIComponent(new URL(c.url).pathname)}을(를) 읽지 못했습니다 (${res.status}).`)
       return decodeText(new Uint8Array(await res.arrayBuffer()))
@@ -27,7 +29,7 @@ function readChapters(chapters: AssembleChapter[]): Promise<string[]> {
 }
 
 async function assemble(payload: AssemblePayload): Promise<AssembleResult> {
-  const result = assembleBook(document, payload, await readChapters(payload.chapters), new DOMParser())
+  const result = assembleBook(document, payload, await readChapters(payload.chapters, payload.chapterOverrides), new DOMParser())
   result.warnings.push(...(await waitForResources(document)))
   if (payload.typeset) {
     typeset(document, payload.typeset)
@@ -38,7 +40,7 @@ async function assemble(payload: AssemblePayload): Promise<AssembleResult> {
 }
 
 async function listImages(payload: ListImagesPayload): Promise<ImageInfo[]> {
-  return findImages(payload, await readChapters(payload.chapters), new DOMParser())
+  return findImages(payload, await readChapters(payload.chapters, payload.chapterOverrides), new DOMParser())
 }
 
 contextBridge.exposeInMainWorld(RENDER_API_NAME, { assemble, listImages })

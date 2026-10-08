@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { imageKeyFromUrl, previewImageUrl, type AssemblePayload } from '@shared/render'
 import { CHAPTER_CLASS } from '@shared/stylesheet'
-import { assembleBook, IMAGE_KEY_ATTR, listImages, parseChapter, rewriteCssUrls, USER_STYLE_ID } from '../../src/render/assemble'
+import { assembleBook, IMAGE_KEY_ATTR, listImages, looksLikeCaption, parseChapter, rewriteCssUrls, USER_STYLE_ID } from '../../src/render/assemble'
 
 const BASE = 'epub://book1/OEBPS/Text/'
 const url = (name: string): string => BASE + name
@@ -297,5 +297,72 @@ describe('imageKeyFromUrl', () => {
     expect(imageKeyFromUrl(previewImageUrl('3:12'))).toBe('3:12')
     expect(imageKeyFromUrl('https://example.com/')).toBeUndefined()
     expect(imageKeyFromUrl(undefined)).toBeUndefined()
+  })
+})
+
+describe('그림 설명(캡션)도 함께 빼기', () => {
+  const texts = () => [...doc.querySelectorAll('section p, section span, section div')].map((e) => e.textContent?.trim()).filter(Boolean)
+
+  it('그림 상자 바로 다음의 설명 문단을 함께 지운다', () => {
+    const page = xhtml('<p>앞 문단</p><div class="img"><img src="a.png"/></div><p class="caption">강가의 새벽 풍경</p><p>뒤 문단</p>')
+    assemble(payload(['c1.xhtml'], { hiddenImages: ['0:0'] }), [page])
+    expect(texts()).toEqual(['앞 문단', '뒤 문단'])
+  })
+
+  it('같은 상자 안 줄바꿈 뒤의 설명도 지운다', () => {
+    const page = xhtml('<div class="pic"><img src="a.png"/><br/><span class="img_txt">사진 설명</span></div><p>본문</p>')
+    assemble(payload(['c1.xhtml'], { hiddenImages: ['0:0'] }), [page])
+    expect(doc.querySelector('.pic')).toBeNull()
+    expect(texts()).toEqual(['본문'])
+  })
+
+  it('설명 꼴의 글머리(▲, [사진], 그림 1)로도 알아본다', () => {
+    const page = xhtml('<p><img src="a.png"/></p><p>▲ 1950년대의 시장 골목</p><p>본문</p>')
+    assemble(payload(['c1.xhtml'], { hiddenImages: ['0:0'] }), [page])
+    expect(texts()).toEqual(['본문'])
+  })
+
+  it('설명처럼 보이지 않는 다음 문단은 남긴다', () => {
+    const page = xhtml('<div><img src="a.png"/></div><p>그날 아침 우리는 강가로 나갔다.</p>')
+    assemble(payload(['c1.xhtml'], { hiddenImages: ['0:0'] }), [page])
+    expect(texts()).toEqual(['그날 아침 우리는 강가로 나갔다.'])
+  })
+
+  it('글 속 그림을 뺄 때는 문단의 다음 글을 건드리지 않는다', () => {
+    const page = xhtml('<p>글 <img src="a.png"/> <span class="caption">문단 안 글</span></p>')
+    assemble(payload(['c1.xhtml'], { hiddenImages: ['0:0'] }), [page])
+    // 그림과 같은 문단 안의 span은 그림 바로 다음이라 설명으로 보고 지운다 (짧고 caption 클래스).
+    expect(doc.querySelector('p')!.textContent!.trim()).toBe('글')
+  })
+
+  it('그림을 빼지 않으면 설명도 그대로', () => {
+    const page = xhtml('<div><img src="a.png"/></div><p class="caption">설명</p>')
+    assemble(payload(['c1.xhtml']), [page])
+    expect(texts()).toContain('설명')
+  })
+})
+
+describe('looksLikeCaption', () => {
+  const el = (html: string): Element => {
+    const d = document.implementation.createHTMLDocument('')
+    d.body.innerHTML = html
+    return d.body.firstElementChild!
+  }
+
+  it('클래스 이름이나 글머리로 설명을 알아본다', () => {
+    expect(looksLikeCaption(el('<p class="photo-caption">x</p>'))).toBe(true)
+    expect(looksLikeCaption(el('<p class="cap">x</p>'))).toBe(true)
+    expect(looksLikeCaption(el('<div class="img_cap">x</div>'))).toBe(true)
+    expect(looksLikeCaption(el('<p>[사진] 설명</p>'))).toBe(true)
+    expect(looksLikeCaption(el('<p>그림 3. 지도</p>'))).toBe(true)
+    expect(looksLikeCaption(el('<figcaption>x</figcaption>'))).toBe(true)
+  })
+
+  it('긴 글, 빈 글, 그림을 담은 요소, 비슷한 이름(capital 등)은 아니다', () => {
+    expect(looksLikeCaption(el(`<p class="caption">${'가'.repeat(201)}</p>`))).toBe(false)
+    expect(looksLikeCaption(el('<p class="caption"> </p>'))).toBe(false)
+    expect(looksLikeCaption(el('<div class="caption"><img src="a.png"/>설명</div>'))).toBe(false)
+    expect(looksLikeCaption(el('<p class="capital">x</p>'))).toBe(false)
+    expect(looksLikeCaption(el('<h3 class="caption">x</h3>'))).toBe(false)
   })
 })

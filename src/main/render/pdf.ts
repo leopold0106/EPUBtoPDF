@@ -52,10 +52,11 @@ export function renderPdf(book: EpubBook, settings: Settings, options: RenderOpt
 }
 
 /** 책에 든 그림 목록 (그림 빼기 화면용). */
-export function listBookImages(book: EpubBook): Promise<ImageInfo[]> {
+export function listBookImages(book: EpubBook, chapterOverrides?: Record<number, string>): Promise<ImageInfo[]> {
   return enqueue(async () => {
     const payload: ListImagesPayload = {
-      chapters: book.spine.map((s) => ({ index: s.index, url: resourceUrl(book.id, s.path) }))
+      chapters: book.spine.map((s) => ({ index: s.index, url: resourceUrl(book.id, s.path) })),
+      chapterOverrides
     }
     const win = createRenderWindow(400)
     try {
@@ -87,6 +88,7 @@ async function renderNow(book: EpubBook, settings: Settings, options: RenderOpti
     lang: book.metadata.language,
     dir: book.direction === 'default' ? undefined : book.direction,
     hiddenImages: options.edits?.hiddenImages,
+    chapterOverrides: options.edits?.chapters,
     markImages: options.markImages,
     typeset: {
       bodyFontPx: settings.layout.epubStyles === 'keep' ? (typography.fontSizePt * 96) / 72 : undefined,

@@ -489,6 +489,69 @@ fieldset.field {
   gap: 8px;
 }
 
+
+
+.message--info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+
+.message--info span {
+  flex: 1;
+}
+
+/* ---------- 본문 편집 ---------- */
+
+.editor {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  margin: 16px 24px;
+  gap: 8px;
+}
+
+.editor__bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.editor__title {
+  font-weight: 600;
+}
+
+.editor__hint {
+  flex: 1;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.editor__badge {
+  font-size: 12px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.editor__frame {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  /* 책 본문은 종이처럼 흰 바탕에 보여준다. */
+  background: #ffffff;
+}
+
+.editor .message {
+  margin: 0;
+}
+
 /* ---------- 그림 ---------- */
 
 .panel-note {
@@ -612,6 +675,25 @@ fieldset.field {
 .preview-bar__undo {
   display: flex;
   gap: 4px;
+}
+
+.preview-bar__undo[hidden] {
+  display: none;
+}
+
+.segmented {
+  display: inline-flex;
+}
+
+.segmented button:first-child {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.segmented button:last-child {
+  margin-left: -1px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
 }
 
 .toggle--on {
@@ -837,4 +919,65 @@ fieldset.field {
 
 .link--danger {
   color: var(--danger) !important;
+}
+
+/* ---------- 글꼴 고르기 ---------- */
+
+.font-picker {
+  position: relative;
+}
+
+.font-picker__list {
+  position: absolute;
+  z-index: 20;
+  left: 0;
+  right: 0;
+  top: 100%;
+  max-height: 320px;
+  overflow-y: auto;
+  margin: 2px 0 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 18%);
+}
+
+.font-picker__group {
+  padding: 6px 8px 2px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.font-picker__option {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.font-picker__option small {
+  font-family: var(--ui-font);
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.font-picker__option[aria-selected='true'] {
+  background: var(--accent-soft);
+}
+
+.font-picker__option--current {
+  font-weight: 600;
+}
+
+.font-picker__empty {
+  padding: 8px;
+  font-size: 12px;
+  color: var(--muted);
 }

@@ -33,7 +33,7 @@ export function ImagePanel({ book, images, error, hidden, onToggle, onSetAll }: 
           모두 넣기
         </button>
       </div>
-      <p className="panel-note">그림을 누르면 PDF에서 빠집니다. 다시 누르면 되돌아옵니다.</p>
+      <p className="panel-note">그림을 누르면 PDF에서 빠집니다 (바로 밑의 그림 설명도 함께). 다시 누르면 되돌아옵니다.</p>
       {[...groups].map(([spineIndex, list]) => (
         <section key={spineIndex} className="image-panel__group">
           <h4>{groupTitle(book, spineIndex, list)}</h4>

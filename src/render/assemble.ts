@@ -30,7 +30,7 @@ export function isImageElement(el: Element): boolean {
 }
 
 /** 장 문서에서 본문으로 옮길 부분. 본문이 SVG 하나뿐인 문서면 그 SVG. */
-function contentRoot(source: Document): Element {
+export function contentRoot(source: Document): Element {
   const root = source.documentElement
   return source.body ?? root
 }
@@ -318,7 +318,8 @@ export function assembleBook(
     // 그림 번호는 원본 순서대로 매긴다 (아래에서 요소를 지우기 전에).
     const toHide: Element[] = []
     ;[...section.querySelectorAll('*')].filter(isImageElement).forEach((el, n) => {
-      const key = imageKey(chapter.index, n)
+      // 본문을 고친 장에는 처음 번호가 속성으로 남아 있다.
+      const key = el.getAttribute(IMAGE_KEY_ATTR) ?? imageKey(chapter.index, n)
       el.setAttribute(IMAGE_KEY_ATTR, key)
       if (hidden.has(key)) toHide.push(el)
     })
@@ -444,6 +445,17 @@ function markTocTargets(doc: Document, payload: AssemblePayload, book: BookConte
   if (layer.childElementCount > 0) doc.body.appendChild(layer)
 }
 
+/**
+ * 장 문서의 그림에 번호 속성을 붙인다 (본문 편집을 시작할 때). 이미 붙어 있으면 그대로 둔다.
+ * 번호는 assembleBook·listImages와 같은 순서로 매긴다.
+ */
+export function stampImageKeys(source: Document, spineIndex: number): void {
+  const root = contentRoot(source)
+  ;[root, ...root.querySelectorAll('*')].filter(isImageElement).forEach((el, n) => {
+    if (!el.hasAttribute(IMAGE_KEY_ATTR)) el.setAttribute(IMAGE_KEY_ATTR, imageKey(spineIndex, n))
+  })
+}
+
 /** 장 문서들에 든 그림 목록. 번호는 assembleBook이 매기는 것과 같다. */
 export function listImages(payload: ListImagesPayload, chapterTexts: string[], parser: DOMParser): ImageInfo[] {
   const images: ImageInfo[] = []
@@ -453,7 +465,7 @@ export function listImages(payload: ListImagesPayload, chapterTexts: string[], p
     found.forEach((el, n) => {
       const href = imageHref(el)
       images.push({
-        key: imageKey(chapter.index, n),
+        key: el.getAttribute(IMAGE_KEY_ATTR) ?? imageKey(chapter.index, n),
         spineIndex: chapter.index,
         src: href ? (tryUrl(href, chapter.url)?.href ?? '') : '',
         alt: el.getAttribute('alt') ?? ''
@@ -479,6 +491,14 @@ export function removeImage(el: Element, stopAt: Element): void {
   const figure = target.closest('figure')
   if (figure && stopAt.contains(figure) && remaining(figure).length === 0) target = figure
 
+  // 그림(또는 그림을 담은 상자) 바로 다음 요소가 그림 설명이면 함께 지운다.
+  const caption = nextElement(target)
+  removeWithEmptyAncestors(target, stopAt)
+  if (caption && stopAt.contains(caption) && looksLikeCaption(caption)) removeWithEmptyAncestors(caption, stopAt)
+}
+
+/** 요소를 지우고, 그래서 비게 된 조상(빈 문단·div)도 지운다. */
+function removeWithEmptyAncestors(target: Element, stopAt: Element): void {
   let parent: Element | null = target.parentElement
   target.remove()
   while (parent && parent !== stopAt && stopAt.contains(parent)) {
@@ -488,6 +508,39 @@ export function removeImage(el: Element, stopAt: Element): void {
     parent.remove()
     parent = next
   }
+}
+
+/**
+ * 그림 다음에 오는 요소. 그림만 담은 상자(빈 문단·div)라면 상자의 다음 요소를 본다.
+ * 사이의 줄바꿈(br)은 건너뛴다.
+ */
+function nextElement(target: Element): Element | null {
+  let node: Element = target
+  while (true) {
+    let next = node.nextElementSibling
+    while (next && next.localName === 'br') next = next.nextElementSibling
+    if (next) return next
+    const parent = node.parentElement
+    // 상자 안에 그림 말고 다른 글이 있으면 상자 밖으로 나가지 않는다.
+    if (!parent || (parent.textContent ?? '').trim() !== (node.textContent ?? '').trim()) return null
+    if (parent.classList.contains(CHAPTER_CLASS)) return null
+    node = parent
+  }
+}
+
+const CAPTION_CLASS =
+  /(caption|figcap|(^|[-_ ])cap([-_ ]|$)|img[-_]?(txt|text|desc|cap)|image[-_]?(txt|text|desc)|photo[-_]?(txt|text|desc|cap)|illust|credit|설명|캡션)/i
+const CAPTION_TEXT = /^\s*(▲|△|▷|↑|\[(사진|그림|도판|자료|출처)|<(사진|그림)|(사진|그림|도판)\s*\d|fig(ure)?\.?\s*\d)/i
+
+/** 그림 설명처럼 보이는가: 짧은 글이고, 설명을 뜻하는 클래스 이름이나 설명 꼴의 글머리가 있다. */
+export function looksLikeCaption(el: Element): boolean {
+  const tag = el.localName.toLowerCase()
+  if (!['p', 'div', 'span', 'small', 'figcaption', 'center'].includes(tag)) return false
+  if (el.querySelector('img, svg, table, p, h1, h2, h3, h4, h5, h6')) return false
+  const text = (el.textContent ?? '').trim()
+  if (text.length === 0 || text.length > 200) return false
+  const names = `${el.getAttribute('class') ?? ''} ${el.getAttribute('id') ?? ''}`
+  return tag === 'figcaption' || CAPTION_CLASS.test(names) || CAPTION_TEXT.test(text)
 }
 
 /** 스타일시트, 그림, 글꼴이 모두 준비될 때까지 기다린다. 실패한 그림 수를 경고로 돌려준다. */

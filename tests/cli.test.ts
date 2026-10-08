@@ -44,6 +44,15 @@ describe('normalizeEdits', () => {
     expect(normalizeEdits(null)).toEqual({ hiddenImages: [] })
     expect(normalizeEdits({ hiddenImages: 'all' })).toEqual({ hiddenImages: [] })
   })
+
+  it('고친 장은 숫자 위치와 문자열 문서만 남긴다', () => {
+    expect(normalizeEdits({ hiddenImages: [], chapters: { '2': '<p>a</p>', x: '<p>b</p>', '3': 5 } })).toEqual({
+      hiddenImages: [],
+      chapters: { 2: '<p>a</p>' }
+    })
+    expect(normalizeEdits({ hiddenImages: [], chapters: ['<p>a</p>'] })).toEqual({ hiddenImages: [] })
+    expect(normalizeEdits({ hiddenImages: [], chapters: {} })).toEqual({ hiddenImages: [] })
+  })
 })
 
 describe('safeFileName', () => {

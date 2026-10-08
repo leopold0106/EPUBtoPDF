@@ -13,6 +13,9 @@ export const IpcChannels = {
   openBookPath: 'book:open-path',
   closeBook: 'book:close',
   listImages: 'book:list-images',
+  readChapter: 'book:read-chapter',
+  loadEdits: 'edits:load',
+  saveEdits: 'edits:save',
   preview: 'preview:render',
   convert: 'convert:run',
   convertProgress: 'convert:progress',
@@ -77,8 +80,13 @@ export interface RendererApi {
   openBookDialog(): Promise<Result<BookSummary> | null>
   openBookPath(path: string): Promise<Result<BookSummary>>
   closeBook(bookId: string): Promise<void>
-  /** 책에 든 그림 목록. */
-  listImages(bookId: string): Promise<Result<ImageInfo[]>>
+  /** 책에 든 그림 목록. 본문을 고친 장은 고친 내용 기준. */
+  listImages(bookId: string, edits?: BookEdits): Promise<Result<ImageInfo[]>>
+  /** 원본 장 문서 (본문 편집용). */
+  readChapter(bookId: string, index: number): Promise<Result<string>>
+  /** 이 책(같은 파일)에 저장해 둔 편집 내용. 없으면 null. */
+  loadEdits(bookId: string): Promise<BookEdits | null>
+  saveEdits(bookId: string, edits: BookEdits): Promise<void>
   /** 미리보기 PDF를 만든다. */
   preview(bookId: string, settings: Settings, edits: BookEdits, request: PreviewRequest): Promise<Result<PreviewResult>>
   /** 저장 위치를 물은 뒤 PDF로 변환한다. 저장을 취소하면 null. */

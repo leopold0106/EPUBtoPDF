@@ -13,7 +13,7 @@ import { promisify } from 'node:util'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { getDocument, type PDFDocumentProxy } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import type { TextItem } from 'pdfjs-dist/types/src/display/api'
-import { buildSampleBook } from '../fixtures/sample-book'
+import { buildSampleBook, sampleChapters } from '../fixtures/sample-book'
 import type { BookEdits } from '@shared/edits'
 import { computeTypography } from '@shared/typography'
 import { makeSettings, type SettingsPatch } from '../helpers'
@@ -207,6 +207,17 @@ describe('명령줄 변환', () => {
     const texts = await allText(pdf)
     expect(texts[0]).toContain(squash('제1장 강가의 아침'))
     expect(texts.join('')).not.toContain(squash('그림 1. 새벽의 강'))
+  })
+
+  it('본문을 고친 장은 고친 문서로 변환한다', async () => {
+    // 본문 편집기가 저장하는 모양(HTML 문서)으로 1장의 그림 설명을 지우고 문단을 하나 넣는다.
+    const body = sampleChapters()[1]!.body.replace('<figcaption>그림 1. 새벽의 강</figcaption>', '') + '<p>편집기에서 새로 넣은 문단</p>'
+    const html = `<!DOCTYPE html>\n<html lang="ko"><head><title>제1장</title><link rel="stylesheet" href="../Styles/style.css"></head><body>${body}</body></html>`
+    const pdf = await convert('edited-chapter', {}, { hiddenImages: [], chapters: { 1: html } })
+    const all = (await allText(pdf)).join('')
+    expect(all).toContain(squash('편집기에서 새로 넣은 문단'))
+    expect(all).not.toContain(squash('그림 1. 새벽의 강'))
+    expect(all).toContain(squash('제3장 등대'))
   })
 
   it('잘못된 설정이면 변환하지 않고 종료 코드 2', async () => {

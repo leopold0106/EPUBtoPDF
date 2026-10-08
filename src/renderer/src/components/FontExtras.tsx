@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { fontDisplayName } from '@shared/font-names'
 import { userFontLabel, type UserFont } from '@shared/fonts'
 
 interface Props {
@@ -23,7 +24,9 @@ export function FontExtras({ family, system, user, onPick, onAdd, onRemove }: Pr
       <div className="font-sample" style={{ fontFamily: `${JSON.stringify(family)}, sans-serif` }}>
         가나다라 마바사 ABC abc 123
       </div>
-      {!known && <p className="issue issue--warning">이 컴퓨터에서 "{family}" 글꼴을 찾지 못했습니다. 다른 글꼴로 대신 인쇄됩니다.</p>}
+      {!known && (
+        <p className="issue issue--warning">이 컴퓨터에서 "{fontDisplayName(family)}" 글꼴을 찾지 못했습니다. 다른 글꼴로 대신 인쇄됩니다.</p>
+      )}
 
       <div className="font-extras__head">
         <span>추가한 글꼴</span>

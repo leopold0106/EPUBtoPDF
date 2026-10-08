@@ -1,7 +1,9 @@
 import { PAPER_SIZES } from '@shared/paper'
 import { LIMITS, resolvePageSize, type Settings } from '@shared/settings'
 import { bodySizeMm, type SettingsIssue, type Typography } from '@shared/typography'
+import { fontDisplayName } from '@shared/font-names'
 import { Checkbox, Choice, NumberField, Section, SelectField } from './fields'
+import { FontPicker, type FontOption } from './FontPicker'
 
 export type SettingsPatch = { [K in keyof Settings]?: Partial<Settings[K]> }
 
@@ -11,8 +13,8 @@ interface Props {
   issues: SettingsIssue[]
   onChange(patch: SettingsPatch): void
   onReset(): void
-  /** 글꼴 이름 입력의 자동 완성 목록. */
-  fontNames: string[]
+  /** 글꼴 고르기 목록. */
+  fontOptions: FontOption[]
   /** 글꼴 설정 아래에 붙일 추가 요소 (글꼴 파일 추가 등). */
   fontExtras?: React.ReactNode
   /** 설정 맨 위에 붙일 요소 (프리셋 등). */
@@ -21,7 +23,7 @@ interface Props {
 
 const fmt = (n: number, d = 1): string => n.toFixed(d).replace(/\.0+$/, '')
 
-export function SettingsPanel({ settings: s, typography: t, issues, onChange, onReset, fontNames, fontExtras, header }: Props): React.JSX.Element {
+export function SettingsPanel({ settings: s, typography: t, issues, onChange, onReset, fontOptions, fontExtras, header }: Props): React.JSX.Element {
   const invalid = (field: string): boolean => issues.some((i) => i.field === field)
   const page = resolvePageSize(s.page)
   const body = bodySizeMm(t)
@@ -101,22 +103,8 @@ export function SettingsPanel({ settings: s, typography: t, issues, onChange, on
         />
       </Section>
 
-      <Section title="글꼴" summary={s.font.family}>
-        <div className="field">
-          <label htmlFor="font-family">글꼴 이름</label>
-          <input
-            id="font-family"
-            type="text"
-            list="font-names"
-            value={s.font.family}
-            onChange={(e) => e.target.value.trim() && onChange({ font: { family: e.target.value } })}
-          />
-          <datalist id="font-names">
-            {fontNames.map((f) => (
-              <option key={f} value={f} />
-            ))}
-          </datalist>
-        </div>
+      <Section title="글꼴" summary={fontDisplayName(s.font.family, fontOptions.find((o) => o.family === s.font.family)?.localized)}>
+        <FontPicker value={s.font.family} options={fontOptions} onChange={(family) => onChange({ font: { family } })} />
         <Choice
           label="없는 글자를 채울 글꼴"
           value={s.font.generic}
