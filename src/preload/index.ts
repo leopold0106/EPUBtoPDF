@@ -6,7 +6,8 @@ const api: RendererApi = {
   openBookDialog: () => ipcRenderer.invoke(IpcChannels.openBookDialog),
   openBookPath: (path) => ipcRenderer.invoke(IpcChannels.openBookPath, path),
   closeBook: (bookId) => ipcRenderer.invoke(IpcChannels.closeBook, bookId),
-  convert: (bookId, settings) => ipcRenderer.invoke(IpcChannels.convert, bookId, settings),
+  listImages: (bookId) => ipcRenderer.invoke(IpcChannels.listImages, bookId),
+  convert: (bookId, settings, edits) => ipcRenderer.invoke(IpcChannels.convert, bookId, settings, edits),
   onConvertProgress: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, progress: ConvertProgress): void => listener(progress)
     ipcRenderer.on(IpcChannels.convertProgress, handler)

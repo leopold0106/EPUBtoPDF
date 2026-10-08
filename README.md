@@ -39,9 +39,10 @@ npm run build:win
 ## 명령줄 변환
 
 창을 띄우지 않고 변환할 수도 있습니다. 설정 파일은 앱 설정과 같은 JSON 형식이며, 빠진 항목은 기본값을 씁니다.
+편집 파일로 뺄 그림을 정할 수 있습니다 (예: `{"hiddenImages": ["0:0"]}` — `장 위치:장 안의 그림 순서`, 0부터).
 
 ```bash
-EPUBtoPDF --convert 책.epub [--out 책.pdf] [--settings 설정.json]
+EPUBtoPDF --convert 책.epub [--out 책.pdf] [--settings 설정.json] [--edits 편집.json]
 # 개발 중에는: npx electron . --convert 책.epub
 ```
 

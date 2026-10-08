@@ -14,6 +14,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { getDocument, type PDFDocumentProxy } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import type { TextItem } from 'pdfjs-dist/types/src/display/api'
 import { buildSampleBook } from '../fixtures/sample-book'
+import type { BookEdits } from '@shared/edits'
 import type { SettingsPatch } from '../helpers'
 
 const run = promisify(execFile)
@@ -35,11 +36,16 @@ afterAll(async () => {
   if (dir) await rm(dir, { recursive: true, force: true })
 })
 
-async function convert(name: string, settings: SettingsPatch): Promise<PDFDocumentProxy> {
+async function convert(name: string, settings: SettingsPatch, edits?: BookEdits): Promise<PDFDocumentProxy> {
   const out = join(dir, `${name}.pdf`)
   const settingsPath = join(dir, `${name}.json`)
   await writeFile(settingsPath, JSON.stringify(settings))
   const args = [root, '--no-sandbox', '--convert', epub, '--out', out, '--settings', settingsPath]
+  if (edits) {
+    const editsPath = join(dir, `${name}.edits.json`)
+    await writeFile(editsPath, JSON.stringify(edits))
+    args.push('--edits', editsPath)
+  }
   const { stdout } = await run(electron, args, { timeout: 90000 })
   expect(stdout).toContain(out)
   return getDocument({ data: new Uint8Array(await readFile(out)) }).promise
@@ -128,6 +134,29 @@ describe('명령줄 변환', () => {
     expect(first.view[2]).toBeCloseTo(182 * MM, 0)
     expect(first.view[3]).toBeCloseTo(128 * MM, 0)
     expect((await allText(pdf)).join('')).toContain(squash('제2장 시장 골목'))
+  })
+
+  it('원본 스타일 무시 모드는 문단 사이와 제목 위아래를 한 줄씩 띄운다', async () => {
+    const pdf = await convert('ignore-spacing', { layout: { epubStyles: 'ignore' } })
+    const texts = await allText(pdf)
+    const n = texts.findIndex((t) => t.includes(squash('제3장 등대'))) + 2
+    // 글줄 기준선 사이 간격: 대부분 한 줄 피치이고, 문단이 바뀌는 곳은 두 줄 피치다.
+    const page = await pdf.getPage(n)
+    const ys = [...new Set((await pageText(pdf, n)).map((i) => Math.round(i.transform[5] as number)))]
+      .filter((y) => y > 20 * MM && y < page.view[3]! - 20 * MM)
+      .sort((a, b) => b - a)
+    const gaps = ys.slice(1).map((y, i) => ys[i]! - y)
+    const pitch = Math.min(...gaps)
+    const ratios = gaps.map((g) => Math.round(g / pitch))
+    expect(new Set(ratios)).toEqual(new Set([1, 2]))
+  })
+
+  it('뺀 그림은 PDF에 들어가지 않는다', async () => {
+    // 0:0은 표지, 1:0은 1장의 강 그림(캡션 포함)
+    const pdf = await convert('hidden-images', {}, { hiddenImages: ['0:0', '1:0'] })
+    const texts = await allText(pdf)
+    expect(texts[0]).toContain(squash('제1장 강가의 아침'))
+    expect(texts.join('')).not.toContain(squash('그림 1. 새벽의 강'))
   })
 
   it('잘못된 설정이면 변환하지 않고 종료 코드 2', async () => {

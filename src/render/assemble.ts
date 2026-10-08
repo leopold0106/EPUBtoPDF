@@ -10,7 +10,8 @@
  * DOM API만 쓰므로 jsdom에서도 테스트할 수 있다. 리소스 로딩을 기다리는 일은 `waitForResources`가 한다.
  */
 
-import type { AssemblePayload, AssembleResult } from '@shared/render'
+import { imageKey } from '@shared/edits'
+import type { AssemblePayload, AssembleResult, ImageInfo, ListImagesPayload } from '@shared/render'
 import { CHAPTER_CLASS } from '@shared/stylesheet'
 
 const XHTML_NS = 'http://www.w3.org/1999/xhtml'
@@ -19,6 +20,25 @@ const XLINK_NS = 'http://www.w3.org/1999/xlink'
 
 export const chapterAnchorId = (index: number): string => `epubtopdf-c${index}`
 export const USER_STYLE_ID = 'epubtopdf-user-style'
+/** 조립한 문서에서 그림 요소에 붙이는 속성. 값은 `imageKey`. */
+export const IMAGE_KEY_ATTR = 'data-epubtopdf-image'
+
+/** 그림으로 세는 요소: HTML의 img와 SVG의 image. 그림 번호는 이 요소들의 문서 순서로 매긴다. */
+export function isImageElement(el: Element): boolean {
+  const name = el.localName.toLowerCase()
+  return (name === 'img' && el.namespaceURI !== SVG_NS) || (name === 'image' && el.namespaceURI === SVG_NS)
+}
+
+/** 장 문서에서 본문으로 옮길 부분. 본문이 SVG 하나뿐인 문서면 그 SVG. */
+function contentRoot(source: Document): Element {
+  const root = source.documentElement
+  return source.body ?? root
+}
+
+function imageHref(el: Element): string | null {
+  if (el.localName.toLowerCase() === 'img') return el.getAttribute('src')
+  return el.getAttribute('href') ?? el.getAttributeNS(XLINK_NS, 'href')
+}
 
 /** XHTML로 읽고, 형식이 깨졌으면 HTML로 다시 읽는다. */
 export function parseChapter(text: string, parser: DOMParser): Document {
@@ -233,7 +253,9 @@ export function assembleBook(
     else doc.head.appendChild(node)
   }
   const bodyClasses = new Set<string>()
+  const hidden = new Set(payload.hiddenImages ?? [])
   let imageCount = 0
+  let hiddenImageCount = 0
 
   for (const { chapter, source } of parsed) {
     const ctx = book.rendered.get(chapter.index)!
@@ -270,7 +292,7 @@ export function assembleBook(
     section.dataset['spineIndex'] = String(chapter.index)
 
     const root = source.documentElement
-    const srcBody = source.body ?? (root.localName === 'svg' ? null : root)
+    const srcBody = contentRoot(source) === root && root.localName === 'svg' ? null : contentRoot(source)
     if (srcBody) {
       for (const cls of srcBody.classList) {
         section.classList.add(cls)
@@ -293,6 +315,17 @@ export function assembleBook(
     if (!keep) for (const el of section.querySelectorAll('style, link')) el.remove()
     else for (const el of section.querySelectorAll('link')) el.remove()
 
+    // 그림 번호는 원본 순서대로 매긴다 (아래에서 요소를 지우기 전에).
+    const toHide: Element[] = []
+    ;[...section.querySelectorAll('*')].filter(isImageElement).forEach((el, n) => {
+      const key = imageKey(chapter.index, n)
+      el.setAttribute(IMAGE_KEY_ATTR, key)
+      if (hidden.has(key)) toHide.push(el)
+    })
+    for (const el of toHide) el.setAttribute('data-epubtopdf-removing', '')
+    for (const el of toHide) removeImage(el, section)
+    hiddenImageCount += toHide.length
+
     for (const el of section.querySelectorAll('*')) {
       const id = el.getAttribute('id')
       if (id !== null && ctx.ids.has(id)) el.setAttribute('id', ctx.ids.get(id)!)
@@ -300,7 +333,7 @@ export function assembleBook(
         el.setAttribute('id', mapId(el.getAttribute('name')!))
       }
       processElement(el, ctx, book, keep)
-      if (el.localName === 'img' || (el.localName === 'image' && el.namespaceURI === SVG_NS)) imageCount++
+      if (isImageElement(el)) imageCount++
     }
     if (keep) {
       for (const style of section.querySelectorAll('style')) {
@@ -308,6 +341,8 @@ export function assembleBook(
       }
     }
 
+    // 그림을 빼서 아무것도 남지 않은 장(표지 등)은 빈 쪽이 생기지 않게 통째로 뺀다.
+    if (toHide.length > 0 && isEmptyChapter(section)) continue
     doc.body.appendChild(section)
   }
 
@@ -322,7 +357,60 @@ export function assembleBook(
   }
   style.textContent = payload.userCss
 
-  return { chapterCount: parsed.length, imageCount, warnings }
+  return { chapterCount: parsed.length, imageCount, hiddenImageCount, warnings }
+}
+
+function isEmptyChapter(section: Element): boolean {
+  return (
+    (section.textContent ?? '').trim() === '' &&
+    !section.querySelector('img, svg, video, audio, object, embed, iframe, canvas, table, hr')
+  )
+}
+
+/** 장 문서들에 든 그림 목록. 번호는 assembleBook이 매기는 것과 같다. */
+export function listImages(payload: ListImagesPayload, chapterTexts: string[], parser: DOMParser): ImageInfo[] {
+  const images: ImageInfo[] = []
+  payload.chapters.forEach((chapter, i) => {
+    const root = contentRoot(parseChapter(chapterTexts[i] ?? '', parser))
+    const found = [root, ...root.querySelectorAll('*')].filter(isImageElement)
+    found.forEach((el, n) => {
+      const href = imageHref(el)
+      images.push({
+        key: imageKey(chapter.index, n),
+        spineIndex: chapter.index,
+        src: href ? (tryUrl(href, chapter.url)?.href ?? '') : '',
+        alt: el.getAttribute('alt') ?? ''
+      })
+    })
+  })
+  return images
+}
+
+/**
+ * 그림을 뺀다. 그림만 담고 있던 것(캡션이 딸린 figure, 그림 하나뿐인 SVG, 빈 문단·div)도 함께 지워
+ * 빈 자리가 남지 않게 한다.
+ */
+export function removeImage(el: Element, stopAt: Element): void {
+  const remaining = (container: Element): Element[] =>
+    [...container.querySelectorAll('*')].filter((e) => e !== el && isImageElement(e) && !e.hasAttribute('data-epubtopdf-removing'))
+
+  let target: Element = el
+  const svg = el.namespaceURI === SVG_NS ? el.closest('svg') : null
+  if (svg && stopAt.contains(svg) && remaining(svg).length === 0 && !svg.querySelector('text, path, rect, circle, ellipse, line, polyline, polygon')) {
+    target = svg
+  }
+  const figure = target.closest('figure')
+  if (figure && stopAt.contains(figure) && remaining(figure).length === 0) target = figure
+
+  let parent: Element | null = target.parentElement
+  target.remove()
+  while (parent && parent !== stopAt && stopAt.contains(parent)) {
+    const empty = (parent.textContent ?? '').trim() === '' && [...parent.children].every((c) => c.localName === 'br')
+    if (!empty) break
+    const next: Element | null = parent.parentElement
+    parent.remove()
+    parent = next
+  }
 }
 
 /** 스타일시트, 그림, 글꼴이 모두 준비될 때까지 기다린다. 실패한 그림 수를 경고로 돌려준다. */

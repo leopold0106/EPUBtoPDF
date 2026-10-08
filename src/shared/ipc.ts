@@ -1,6 +1,8 @@
 /** 메인 프로세스와 렌더러가 주고받는 IPC 채널 이름과 타입. */
 
 import type { BookSummary } from './book'
+import type { BookEdits } from './edits'
+import type { ImageInfo } from './render'
 import type { Settings } from './settings'
 
 export const IpcChannels = {
@@ -8,6 +10,7 @@ export const IpcChannels = {
   openBookDialog: 'book:open-dialog',
   openBookPath: 'book:open-path',
   closeBook: 'book:close',
+  listImages: 'book:list-images',
   convert: 'convert:run',
   convertProgress: 'convert:progress',
   openOutput: 'output:open',
@@ -44,8 +47,10 @@ export interface RendererApi {
   openBookDialog(): Promise<Result<BookSummary> | null>
   openBookPath(path: string): Promise<Result<BookSummary>>
   closeBook(bookId: string): Promise<void>
+  /** 책에 든 그림 목록. */
+  listImages(bookId: string): Promise<Result<ImageInfo[]>>
   /** 저장 위치를 물은 뒤 PDF로 변환한다. 저장을 취소하면 null. */
-  convert(bookId: string, settings: Settings): Promise<Result<ConvertResult> | null>
+  convert(bookId: string, settings: Settings, edits: BookEdits): Promise<Result<ConvertResult> | null>
   /** 변환 진행 상황을 받는다. 돌려받은 함수를 부르면 구독을 끊는다. */
   onConvertProgress(listener: (progress: ConvertProgress) => void): () => void
   openOutput(path: string): Promise<void>

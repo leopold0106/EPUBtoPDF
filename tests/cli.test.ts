@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { join, resolve } from 'node:path'
+import { normalizeEdits } from '@shared/edits'
 import { safeFileName } from '@shared/filename'
 import { CLI_USAGE, parseCliArgs } from '../src/main/cli-args'
 
@@ -14,7 +15,8 @@ describe('parseCliArgs', () => {
     expect(parseCliArgs(['app.exe', '--convert', 'books/책.epub'], cwd)).toEqual({
       input: join(cwd, 'books/책.epub'),
       output: join(cwd, 'books/책.pdf'),
-      settingsPath: undefined
+      settingsPath: undefined,
+      editsPath: undefined
     })
   })
 
@@ -22,7 +24,8 @@ describe('parseCliArgs', () => {
     expect(parseCliArgs(['app.exe', '--settings', 's.json', '--convert', 'a.epub', '--out', 'o/b.pdf'], cwd)).toEqual({
       input: join(cwd, 'a.epub'),
       output: join(cwd, 'o/b.pdf'),
-      settingsPath: join(cwd, 's.json')
+      settingsPath: join(cwd, 's.json'),
+      editsPath: undefined
     })
   })
 
@@ -31,6 +34,15 @@ describe('parseCliArgs', () => {
     expect(parseCliArgs(['app.exe', '--convert', '--out', 'x.pdf'], cwd)).toEqual({ error: CLI_USAGE })
     expect(parseCliArgs(['app.exe', '--convert', 'a.epub', '--out'], cwd)).toEqual({ error: CLI_USAGE })
     expect(parseCliArgs(['app.exe', '--convert', 'a.epub', '--settings', '--out', 'x.pdf'], cwd)).toEqual({ error: CLI_USAGE })
+    expect(parseCliArgs(['app.exe', '--convert', 'a.epub', '--edits'], cwd)).toEqual({ error: CLI_USAGE })
+  })
+})
+
+describe('normalizeEdits', () => {
+  it('형식이 맞는 그림 키만 남기고 중복을 없앤다', () => {
+    expect(normalizeEdits({ hiddenImages: ['0:1', '0:1', 'x', 3, '2:10'] })).toEqual({ hiddenImages: ['0:1', '2:10'] })
+    expect(normalizeEdits(null)).toEqual({ hiddenImages: [] })
+    expect(normalizeEdits({ hiddenImages: 'all' })).toEqual({ hiddenImages: [] })
   })
 })
 

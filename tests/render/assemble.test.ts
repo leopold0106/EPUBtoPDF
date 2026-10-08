@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { AssemblePayload } from '@shared/render'
 import { CHAPTER_CLASS } from '@shared/stylesheet'
-import { assembleBook, parseChapter, rewriteCssUrls, USER_STYLE_ID } from '../../src/render/assemble'
+import { assembleBook, IMAGE_KEY_ATTR, listImages, parseChapter, rewriteCssUrls, USER_STYLE_ID } from '../../src/render/assemble'
 
 const BASE = 'epub://book1/OEBPS/Text/'
 const url = (name: string): string => BASE + name
@@ -193,5 +193,74 @@ describe('assembleBook', () => {
     assemble(payload(['c2.xhtml']), [xhtml('<p>다음</p>')])
     expect(doc.body.textContent).toBe('다음')
     expect(doc.querySelectorAll(`#${USER_STYLE_ID}`)).toHaveLength(1)
+  })
+})
+
+describe('그림 빼기', () => {
+  const chapter1 = xhtml(
+    '<p>앞</p><figure><img src="../Images/a.png" alt="가"/><figcaption>그림 1</figcaption></figure>' +
+      '<p>글 <img src="../Images/icon.png" alt="아이콘"/> 글</p>' +
+      '<div class="pic"><p><img src="../Images/b.png" alt="나"/></p></div><p>뒤</p>'
+  )
+  const cover = xhtml(
+    '<div class="cover"><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 10 10"><image xlink:href="../Images/cover.jpg" width="10" height="10"/></svg></div>'
+  )
+
+  it('그림 목록과 assembleBook의 그림 번호가 같다', () => {
+    const p = payload(['c1.xhtml', 'c2.xhtml'])
+    const list = listImages(p, [chapter1, cover], new DOMParser())
+    expect(list).toEqual([
+      { key: '0:0', spineIndex: 0, src: 'epub://book1/OEBPS/Images/a.png', alt: '가' },
+      { key: '0:1', spineIndex: 0, src: 'epub://book1/OEBPS/Images/icon.png', alt: '아이콘' },
+      { key: '0:2', spineIndex: 0, src: 'epub://book1/OEBPS/Images/b.png', alt: '나' },
+      { key: '1:0', spineIndex: 1, src: 'epub://book1/OEBPS/Images/cover.jpg', alt: '' }
+    ])
+    assemble(p, [chapter1, cover])
+    expect([...doc.querySelectorAll(`[${IMAGE_KEY_ATTR}]`)].map((e) => e.getAttribute(IMAGE_KEY_ATTR))).toEqual(list.map((i) => i.key))
+  })
+
+  it('캡션이 딸린 figure는 통째로 뺀다', () => {
+    const result = assemble(payload(['c1.xhtml'], { hiddenImages: ['0:0'] }), [chapter1])
+    expect(doc.querySelector('figure')).toBeNull()
+    expect(doc.body.textContent).not.toContain('그림 1')
+    expect(result.hiddenImageCount).toBe(1)
+  })
+
+  it('글 속 그림은 그림만 빼고 글은 남긴다', () => {
+    assemble(payload(['c1.xhtml'], { hiddenImages: ['0:1'] }), [chapter1])
+    expect(doc.querySelector('img[alt="아이콘"]')).toBeNull()
+    expect(doc.body.textContent).toContain('글  글')
+  })
+
+  it('그림만 있던 문단과 div도 함께 지워 빈 자리가 남지 않게 한다', () => {
+    assemble(payload(['c1.xhtml'], { hiddenImages: ['0:2'] }), [chapter1])
+    expect(doc.querySelector('.pic')).toBeNull()
+    expect([...doc.querySelectorAll('section > p')].map((p) => p.textContent)).toEqual(['앞', '글  글', '뒤'])
+  })
+
+  it('그림 하나뿐인 SVG 표지는 SVG와 감싼 div까지 지우고, 비게 된 장은 통째로 뺀다', () => {
+    assemble(payload(['c1.xhtml', 'c2.xhtml'], { hiddenImages: ['1:0'] }), [xhtml('<p>본문</p>'), cover])
+    expect(doc.querySelector('svg')).toBeNull()
+    expect(doc.querySelector('.cover')).toBeNull()
+    expect([...doc.querySelectorAll('section')].map((s) => s.id)).toEqual(['epubtopdf-c0'])
+  })
+
+  it('그림을 빼지 않은 빈 장은 그대로 둔다', () => {
+    assemble(payload(['c1.xhtml']), [xhtml('')])
+    expect(doc.querySelectorAll('section')).toHaveLength(1)
+  })
+
+  it('같은 figure의 그림 두 개를 모두 빼도 오류가 없다', () => {
+    const two = xhtml('<figure><img src="a.png"/><img src="b.png"/><figcaption>둘</figcaption></figure><p>글</p>')
+    assemble(payload(['c1.xhtml'], { hiddenImages: ['0:0', '0:1'] }), [two])
+    expect(doc.querySelector('figure')).toBeNull()
+    expect(doc.body.textContent).toBe('글')
+  })
+
+  it('figure 안 그림 하나만 빼면 figure와 다른 그림은 남는다', () => {
+    const two = xhtml('<figure><img src="a.png"/><img src="b.png"/><figcaption>둘</figcaption></figure>')
+    assemble(payload(['c1.xhtml'], { hiddenImages: ['0:0'] }), [two])
+    expect(doc.querySelectorAll('figure img')).toHaveLength(1)
+    expect(doc.querySelector('figcaption')).not.toBeNull()
   })
 })

@@ -6,7 +6,8 @@
  *   4. pdf-lib로 메타데이터를 넣는다.
  */
 
-import type { AssemblePayload, AssembleResult } from '@shared/render'
+import type { BookEdits } from '@shared/edits'
+import type { AssemblePayload, AssembleResult, ImageInfo, ListImagesPayload } from '@shared/render'
 import { RENDER_API_NAME, RENDER_PAGE_PATH } from '@shared/render'
 import type { Settings } from '@shared/settings'
 import { buildStylesheet } from '@shared/stylesheet'
@@ -21,6 +22,7 @@ export type RenderStage = 'assembling' | 'printing' | 'finishing'
 export interface RenderOptions {
   /** 렌더링할 장(spine 위치). 생략하면 전체. */
   chapters?: number[]
+  edits?: BookEdits
   onStage?: (stage: RenderStage) => void
 }
 
@@ -31,13 +33,35 @@ export interface RenderOutput {
   warnings: string[]
 }
 
-/** 렌더링 창은 하나씩만 쓰도록 순서대로 실행한다. */
+/** 렌더링 창 작업은 하나씩 순서대로 실행한다. */
 let queue: Promise<unknown> = Promise.resolve()
 
-export function renderPdf(book: EpubBook, settings: Settings, options: RenderOptions = {}): Promise<RenderOutput> {
-  const run = queue.then(() => renderNow(book, settings, options))
+function enqueue<T>(task: () => Promise<T>): Promise<T> {
+  const run = queue.then(task)
   queue = run.catch(() => undefined)
   return run
+}
+
+export function renderPdf(book: EpubBook, settings: Settings, options: RenderOptions = {}): Promise<RenderOutput> {
+  return enqueue(() => renderNow(book, settings, options))
+}
+
+/** 책에 든 그림 목록 (그림 빼기 화면용). */
+export function listBookImages(book: EpubBook): Promise<ImageInfo[]> {
+  return enqueue(async () => {
+    const payload: ListImagesPayload = {
+      chapters: book.spine.map((s) => ({ index: s.index, url: resourceUrl(book.id, s.path) }))
+    }
+    const win = createRenderWindow(400)
+    try {
+      await win.loadURL(resourceUrl(book.id, RENDER_PAGE_PATH))
+      return (await win.webContents.executeJavaScript(
+        `window.${RENDER_API_NAME}.listImages(${JSON.stringify(payload)})`
+      )) as ImageInfo[]
+    } finally {
+      win.destroy()
+    }
+  })
 }
 
 async function renderNow(book: EpubBook, settings: Settings, options: RenderOptions): Promise<RenderOutput> {
@@ -49,7 +73,8 @@ async function renderNow(book: EpubBook, settings: Settings, options: RenderOpti
     keepEpubStyles: settings.layout.epubStyles === 'keep',
     userCss: buildStylesheet(settings, typography, { bookTitle: book.metadata.title }),
     lang: book.metadata.language,
-    dir: book.direction === 'default' ? undefined : book.direction
+    dir: book.direction === 'default' ? undefined : book.direction,
+    hiddenImages: options.edits?.hiddenImages
   }
 
   const win = createRenderWindow(typography.bodyWidthPx)

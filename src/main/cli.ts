@@ -5,6 +5,7 @@
 
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
+import { normalizeEdits } from '@shared/edits'
 import { normalizeSettings } from '@shared/settings'
 import { openBookFile } from './books'
 import type { CliArgs } from './cli-args'
@@ -12,17 +13,21 @@ import { convertBook, settingsErrors } from './convert'
 import { library } from './epub/library'
 
 /** 변환하고 종료 코드를 돌려준다. */
-export async function runCli(args: CliArgs): Promise<number> {
-  let rawSettings: unknown = {}
-  if (args.settingsPath) {
-    try {
-      rawSettings = JSON.parse(await readFile(resolve(args.settingsPath), 'utf8'))
-    } catch (err) {
-      console.error(`설정 파일을 읽을 수 없습니다: ${args.settingsPath} (${err instanceof Error ? err.message : err})`)
-      return 2
-    }
+async function readJson(path: string | undefined, label: string): Promise<{ value: unknown } | undefined> {
+  if (!path) return { value: {} }
+  try {
+    return { value: JSON.parse(await readFile(resolve(path), 'utf8')) }
+  } catch (err) {
+    console.error(`${label} 파일을 읽을 수 없습니다: ${path} (${err instanceof Error ? err.message : err})`)
+    return undefined
   }
-  const settings = normalizeSettings(rawSettings)
+}
+
+export async function runCli(args: CliArgs): Promise<number> {
+  const rawSettings = await readJson(args.settingsPath, '설정')
+  const rawEdits = await readJson(args.editsPath, '편집')
+  if (!rawSettings || !rawEdits) return 2
+  const settings = normalizeSettings(rawSettings.value)
   const errors = settingsErrors(settings)
   if (errors.length > 0) {
     console.error(errors.join('\n'))
@@ -37,7 +42,7 @@ export async function runCli(args: CliArgs): Promise<number> {
   for (const w of opened.value.warnings) console.warn(`경고: ${w}`)
   const book = library.get(opened.value.id)!
   try {
-    const result = await convertBook(book, settings, args.output)
+    const result = await convertBook(book, settings, args.output, { edits: normalizeEdits(rawEdits.value) })
     for (const w of result.warnings) console.warn(`경고: ${w}`)
     console.log(`${result.path} (${result.pageCount}쪽, ${result.seconds.toFixed(1)}초)`)
     return 0

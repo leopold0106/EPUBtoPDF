@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import type { BookSummary, TocEntry } from '@shared/book'
 import type { AppInfo, ConvertProgress, ConvertResult, Result } from '@shared/ipc'
+import type { ImageInfo } from '@shared/render'
 import { DEFAULT_SETTINGS } from '@shared/settings'
+import { ImagePanel } from './components/ImagePanel'
 
 const STAGE_LABELS: Record<ConvertProgress['stage'], string> = {
   assembling: '문서 조립 중…',
@@ -16,6 +18,33 @@ export default function App(): React.JSX.Element {
   const [opening, setOpening] = useState(false)
   const [converting, setConverting] = useState<ConvertProgress['stage'] | 'waiting' | null>(null)
   const [converted, setConverted] = useState<ConvertResult | null>(null)
+  const [images, setImages] = useState<ImageInfo[] | null>(null)
+  const [imagesError, setImagesError] = useState<string | null>(null)
+  const [hiddenImages, setHiddenImages] = useState<ReadonlySet<string>>(new Set())
+
+  useEffect(() => {
+    if (!book) return
+    let cancelled = false
+    setImages(null)
+    setImagesError(null)
+    void window.api.listImages(book.id).then((result) => {
+      if (cancelled) return
+      if (result.ok) setImages(result.value)
+      else setImagesError(result.error)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [book])
+
+  function toggleImage(key: string): void {
+    setHiddenImages((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
 
   useEffect(() => {
     void window.api.getAppInfo().then(setInfo)
@@ -28,7 +57,7 @@ export default function App(): React.JSX.Element {
     setError(null)
     try {
       // 설정 화면은 5단계에서 붙인다. 지금은 기본 설정으로 변환한다.
-      const result = await window.api.convert(book.id, DEFAULT_SETTINGS)
+      const result = await window.api.convert(book.id, DEFAULT_SETTINGS, { hiddenImages: [...hiddenImages] })
       if (!result) return
       if (result.ok) setConverted(result.value)
       else setError(result.error)
@@ -47,6 +76,7 @@ export default function App(): React.JSX.Element {
     setBook(result.value)
     setError(null)
     setConverted(null)
+    setHiddenImages(new Set())
   }
 
   async function openDialog(): Promise<void> {
@@ -87,6 +117,19 @@ export default function App(): React.JSX.Element {
         <aside className="settings">
           <h2>설정</h2>
           <p className="placeholder">용지, 여백, 글꼴, 본문 설정이 여기에 들어갑니다.</p>
+          {book && (
+            <>
+              <h2>그림</h2>
+              <ImagePanel
+                book={book}
+                images={images}
+                error={imagesError}
+                hidden={hiddenImages}
+                onToggle={toggleImage}
+                onSetAll={(hide) => setHiddenImages(hide && images ? new Set(images.map((i) => i.key)) : new Set())}
+              />
+            </>
+          )}
         </aside>
         <section className="preview">
           {error && <p className="message message--error">{error}</p>}

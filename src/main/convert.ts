@@ -4,12 +4,14 @@ import { writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { IpcChannels, type ConvertProgress, type ConvertResult, type Result } from '@shared/ipc'
+import type { ImageInfo } from '@shared/render'
+import { normalizeEdits, type BookEdits } from '@shared/edits'
 import { safeFileName } from '@shared/filename'
 import { normalizeSettings, type Settings } from '@shared/settings'
 import { validateSettings } from '@shared/typography'
 import type { EpubBook } from './epub/parse'
 import { library } from './epub/library'
-import { renderPdf, type RenderStage } from './render/pdf'
+import { listBookImages, renderPdf, type RenderStage } from './render/pdf'
 
 export function settingsErrors(settings: Settings): string[] {
   return validateSettings(settings)
@@ -21,10 +23,10 @@ export async function convertBook(
   book: EpubBook,
   settings: Settings,
   outputPath: string,
-  onStage?: (stage: RenderStage) => void
+  options: { edits?: BookEdits; onStage?: (stage: RenderStage) => void } = {}
 ): Promise<ConvertResult> {
   const started = Date.now()
-  const output = await renderPdf(book, settings, { onStage })
+  const output = await renderPdf(book, settings, options)
   await writeFile(outputPath, output.pdf)
   return {
     path: outputPath,
@@ -38,7 +40,18 @@ export async function convertBook(
 const outputs = new Set<string>()
 
 export function registerConvertIpc(): void {
-  ipcMain.handle(IpcChannels.convert, async (event, bookId: unknown, rawSettings: unknown): Promise<Result<ConvertResult> | null> => {
+  ipcMain.handle(IpcChannels.listImages, async (_event, bookId: unknown): Promise<Result<ImageInfo[]>> => {
+    const book = typeof bookId === 'string' ? library.get(bookId) : undefined
+    if (!book) return { ok: false, error: '열린 책이 없습니다.' }
+    try {
+      return { ok: true, value: await listBookImages(book) }
+    } catch (err) {
+      console.error(err)
+      return { ok: false, error: `그림 목록을 만들지 못했습니다: ${err instanceof Error ? err.message : String(err)}` }
+    }
+  })
+
+  ipcMain.handle(IpcChannels.convert, async (event, bookId: unknown, rawSettings: unknown, rawEdits: unknown): Promise<Result<ConvertResult> | null> => {
     const book = typeof bookId === 'string' ? library.get(bookId) : undefined
     if (!book) return { ok: false, error: '열린 책이 없습니다. EPUB을 다시 열어 주세요.' }
     const settings = normalizeSettings(rawSettings)
@@ -60,7 +73,7 @@ export function registerConvertIpc(): void {
       if (!event.sender.isDestroyed()) event.sender.send(IpcChannels.convertProgress, progress)
     }
     try {
-      const result = await convertBook(book, settings, picked.filePath, report)
+      const result = await convertBook(book, settings, picked.filePath, { edits: normalizeEdits(rawEdits), onStage: report })
       outputs.add(result.path)
       return { ok: true, value: result }
     } catch (err) {

@@ -23,10 +23,27 @@ export interface AssemblePayload {
   userCss: string
   lang?: string
   dir?: 'ltr' | 'rtl'
+  /** 뺄 그림 (`imageKey`). */
+  hiddenImages?: string[]
+}
+
+/** 그림 목록을 만들 때 넘기는 값. */
+export interface ListImagesPayload {
+  chapters: AssembleChapter[]
+}
+
+export interface ImageInfo {
+  /** `imageKey(장 위치, 장 안의 순서)` */
+  key: string
+  spineIndex: number
+  /** `epub://` 절대 주소. 주소가 없거나 잘못되었으면 빈 문자열. */
+  src: string
+  alt: string
 }
 
 export interface AssembleResult {
   chapterCount: number
   imageCount: number
+  hiddenImageCount: number
   warnings: string[]
 }
