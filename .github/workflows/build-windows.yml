@@ -22,6 +22,9 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      # 러너에 한글 글꼴이 없으면 한글이 빈 글리프로 인쇄되어 PDF 글자 검사가 실패한다.
+      - name: 한글 글꼴 설치
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fonts-noto-cjk
       # 빌드한 앱을 실행해 샘플 EPUB을 실제 PDF로 변환해 본다.
       - run: xvfb-run -a npm run test:e2e
 
