@@ -49,6 +49,8 @@ export function PreviewPane(props: Props): React.JSX.Element {
   const [menu, setMenu] = useState<{ key: string; x: number; y: number } | null>(null)
   const scroller = useRef<HTMLDivElement>(null)
   const lineCounts = useRef(new Map<number, number>())
+  /** 지금 보여주는 PDF. 이전 PDF의 쪽이 늦게 보낸 줄 수를 걸러내는 데 쓴다. */
+  const currentDoc = useRef<PDFDocumentProxy | null>(null)
 
   useEffect(() => {
     const el = scroller.current
@@ -75,6 +77,7 @@ export function PreviewPane(props: Props): React.JSX.Element {
           list.push({ width: x1 - x0, height: y1 - y0 })
         }
         if (cancelled) return
+        currentDoc.current = d
         lineCounts.current = new Map()
         onMeasure(lineCounts.current)
         setDoc(d)
@@ -105,7 +108,9 @@ export function PreviewPane(props: Props): React.JSX.Element {
   const fit = (width - 48 - GAP * (columns - 1)) / (maxPageWidth * columns)
   const scale = Math.max(0.1, fit * zoom)
 
-  const measured = (index: number, lines: number): void => {
+  // 새 PDF로 바뀐 직후에는 이전 PDF의 쪽이 아직 화면에 남아 있다가 줄 수를 보낼 수 있다. 그런 값은 버린다.
+  const measured = (from: PDFDocumentProxy, index: number, lines: number): void => {
+    if (from !== currentDoc.current) return
     lineCounts.current.set(index, lines)
     onMeasure(new Map(lineCounts.current))
   }
@@ -175,7 +180,7 @@ interface PageViewProps {
   selectedImage: string | null
   onSelectImage(key: string): void
   onImageMenu(key: string, x: number, y: number): void
-  onMeasured(index: number, lines: number): void
+  onMeasured(doc: PDFDocumentProxy, index: number, lines: number): void
 }
 
 function PageView({ doc, index, size, scale, marginsMm, selectedImage, onSelectImage, onImageMenu, onMeasured }: PageViewProps): React.JSX.Element {
@@ -231,13 +236,13 @@ function PageView({ doc, index, size, scale, marginsMm, selectedImage, onSelectI
         if (last - y > 2) lines++
         last = y
       }
-      if (!cancelled) onMeasured(index, lines)
+      if (!cancelled) onMeasured(doc, index, lines)
     })()
     return () => {
       cancelled = true
     }
     // onMeasured는 부모가 다시 만들어도 다시 셀 필요가 없다.
-  }, [page, index, size.height, marginsMm.top, marginsMm.bottom])
+  }, [page, doc, index, size.height, marginsMm.top, marginsMm.bottom])
 
   // 보이는 동안 현재 배율로 그린다.
   useEffect(() => {
