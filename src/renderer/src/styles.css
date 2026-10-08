@@ -11,7 +11,9 @@
   --danger: #b91c1c;
   --warning: #92400e;
   color-scheme: light dark;
-  font-family: 'Segoe UI', 'Malgun Gothic', system-ui, sans-serif;
+  /* 앱 화면 글꼴: 한글·영문·숫자 모두 맑은 고딕 (없는 환경에서는 비슷한 고딕) */
+  --ui-font: 'Malgun Gothic', '맑은 고딕', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Noto Sans CJK KR', system-ui, sans-serif;
+  font-family: var(--ui-font);
   font-size: 13px;
 }
 
@@ -772,7 +774,7 @@ fieldset.field {
 }
 
 .user-fonts__count {
-  font-family: 'Segoe UI', 'Malgun Gothic', system-ui, sans-serif;
+  font-family: var(--ui-font);
   font-size: 11px;
   color: var(--muted);
 }
