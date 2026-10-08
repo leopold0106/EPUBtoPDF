@@ -724,3 +724,62 @@ fieldset.field {
   font-size: 11px;
   color: var(--muted);
 }
+
+/* ---------- 글꼴 ---------- */
+
+.font-sample {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  font-size: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.font-extras__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 8px 0 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.user-fonts {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.user-fonts__item {
+  display: flex;
+  align-items: center;
+  border-radius: 6px;
+}
+
+.user-fonts__item--on {
+  background: var(--accent-soft);
+}
+
+.user-fonts__name {
+  flex: 1;
+  border: none;
+  background: none;
+  text-align: left;
+  font-size: 14px;
+}
+
+.user-fonts__count {
+  font-family: 'Segoe UI', 'Malgun Gothic', system-ui, sans-serif;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.user-fonts__remove {
+  border: none;
+  background: none;
+  color: var(--muted);
+  padding: 4px 8px;
+}

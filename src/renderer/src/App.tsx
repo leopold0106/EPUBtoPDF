@@ -7,7 +7,9 @@ import { DEFAULT_SETTINGS } from '@shared/settings'
 import { computeTypography, validateSettings } from '@shared/typography'
 import { ImagePanel } from './components/ImagePanel'
 import { PreviewPane } from './components/PreviewPane'
+import { FontExtras } from './components/FontExtras'
 import { SettingsPanel } from './components/SettingsPanel'
+import { useFonts } from './hooks/useFonts'
 import { usePreview } from './hooks/usePreview'
 import { useSettings } from './hooks/useSettings'
 import { useUndoable } from './hooks/useUndoable'
@@ -18,8 +20,8 @@ const STAGE_LABELS: Record<ConvertProgress['stage'], string> = {
   finishing: '마무리 중…'
 }
 
-/** 한글 이름을 같이 보여주는 Windows 기본 글꼴. 8단계에서 시스템 글꼴 목록으로 바뀐다. */
-const COMMON_FONTS = ['Malgun Gothic', 'Batang', 'Dotum', 'Gulim', 'Gungsuh', 'NanumGothic', 'NanumMyeongjo']
+/** 시스템 글꼴 목록을 못 읽었을 때 보여줄 Windows 기본 한글 글꼴. */
+const COMMON_FONTS = ['Malgun Gothic', 'Batang', 'BatangChe', 'Dotum', 'Gulim', 'Gungsuh']
 
 type SidebarTab = 'settings' | 'images'
 
@@ -62,6 +64,11 @@ export default function App(): React.JSX.Element {
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const [lineCounts, setLineCounts] = useState<Map<number, number>>(new Map())
   const { settings, update, replace } = useSettings()
+  const fonts = useFonts()
+  const fontNames = useMemo(
+    () => [...new Set([...fonts.user.map((f) => f.family), ...(fonts.system?.length ? fonts.system : COMMON_FONTS)])],
+    [fonts.user, fonts.system]
+  )
 
   const typography = useMemo(() => computeTypography(settings), [settings])
   const issues = useMemo(() => validateSettings(settings, typography), [settings, typography])
@@ -271,7 +278,17 @@ export default function App(): React.JSX.Element {
                 issues={issues}
                 onChange={update}
                 onReset={() => replace(DEFAULT_SETTINGS)}
-                fontNames={COMMON_FONTS}
+                fontNames={fontNames}
+                fontExtras={
+                  <FontExtras
+                    family={settings.font.family}
+                    system={fonts.system}
+                    user={fonts.user}
+                    onPick={(family) => update({ font: { family } })}
+                    onAdd={fonts.add}
+                    onRemove={fonts.remove}
+                  />
+                }
               />
             ) : book ? (
               <ImagePanel

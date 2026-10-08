@@ -45,7 +45,7 @@ export const RENDER_PAGE_CSP = [
   "script-src 'none'",
   "style-src epub: 'unsafe-inline'",
   'img-src epub: data: blob:',
-  'font-src epub: data:',
+  'font-src epub: app-font: data:',
   'media-src epub: data:',
   'connect-src epub:'
 ].join('; ')

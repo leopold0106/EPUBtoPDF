@@ -5,8 +5,11 @@
 
 import { join } from 'node:path'
 import { BrowserWindow, session, type Session } from 'electron'
+import { FONT_SCHEME } from '@shared/fonts'
 import { library } from '../epub/library'
 import { EPUB_SCHEME, handleResourceRequest } from '../epub/protocol'
+import { fontRegistry } from '../fonts'
+import { handleFontRequest } from '../fonts/registry'
 
 const PARTITION = 'epubtopdf-render'
 let renderSession: Session | undefined
@@ -15,6 +18,7 @@ function getRenderSession(): Session {
   if (renderSession) return renderSession
   const ses = session.fromPartition(PARTITION, { cache: false })
   ses.protocol.handle(EPUB_SCHEME, (request) => handleResourceRequest(request.url, library.get))
+  ses.protocol.handle(FONT_SCHEME, (request) => handleFontRequest(request.url, fontRegistry()))
   ses.webRequest.onBeforeRequest(
     { urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*', 'ftp://*/*', 'file://*/*'] },
     (_details, callback) => callback({ cancel: true })

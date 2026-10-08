@@ -2,6 +2,7 @@
 
 import type { BookSummary } from './book'
 import type { BookEdits } from './edits'
+import type { UserFont } from './fonts'
 import type { ImageInfo } from './render'
 import type { Settings } from './settings'
 
@@ -19,7 +20,10 @@ export const IpcChannels = {
   loadSettings: 'settings:load',
   saveSettings: 'settings:save',
   takeLaunchFile: 'app:take-launch-file',
-  openRequest: 'book:open-request'
+  openRequest: 'book:open-request',
+  listUserFonts: 'fonts:list',
+  addUserFonts: 'fonts:add',
+  removeUserFont: 'fonts:remove'
 } as const
 
 export interface AppInfo {
@@ -85,4 +89,8 @@ export interface RendererApi {
   onOpenRequest(listener: (path: string) => void): () => void
   /** 끌어다 놓은 파일의 경로. */
   pathForFile(file: File): string
+  listUserFonts(): Promise<UserFont[]>
+  /** 파일 선택 창을 띄워 글꼴을 추가한다. 취소하면 null. */
+  addUserFonts(): Promise<{ added: UserFont[]; failed: { fileName: string; reason: string }[] } | null>
+  removeUserFont(id: string): Promise<void>
 }

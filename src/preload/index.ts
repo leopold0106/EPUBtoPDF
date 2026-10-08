@@ -24,7 +24,10 @@ const api: RendererApi = {
     ipcRenderer.on(IpcChannels.openRequest, handler)
     return () => ipcRenderer.removeListener(IpcChannels.openRequest, handler)
   },
-  pathForFile: (file) => webUtils.getPathForFile(file)
+  pathForFile: (file) => webUtils.getPathForFile(file),
+  listUserFonts: () => ipcRenderer.invoke(IpcChannels.listUserFonts),
+  addUserFonts: () => ipcRenderer.invoke(IpcChannels.addUserFonts),
+  removeUserFont: (id) => ipcRenderer.invoke(IpcChannels.removeUserFont, id)
 }
 
 contextBridge.exposeInMainWorld('api', api)

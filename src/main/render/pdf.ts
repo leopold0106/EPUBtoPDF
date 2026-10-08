@@ -14,6 +14,7 @@ import { buildStylesheet } from '@shared/stylesheet'
 import { computeTypography, type Typography } from '@shared/typography'
 import type { EpubBook } from '../epub/parse'
 import { resourceUrl } from '../epub/protocol'
+import { fontRegistry } from '../fonts'
 import { finalizePdf } from './postprocess'
 import { createRenderWindow } from './window'
 
@@ -73,7 +74,7 @@ async function renderNow(book: EpubBook, settings: Settings, options: RenderOpti
     chapters: indexes.map((index) => ({ index, url: resourceUrl(book.id, book.spine[index]!.path) })),
     spineUrls: book.spine.map((s) => resourceUrl(book.id, s.path)),
     keepEpubStyles: settings.layout.epubStyles === 'keep',
-    userCss: buildStylesheet(settings, typography, { bookTitle: book.metadata.title }),
+    userCss: buildStylesheet(settings, typography, { bookTitle: book.metadata.title, fontFaces: await fontRegistry().faces() }),
     lang: book.metadata.language,
     dir: book.direction === 'default' ? undefined : book.direction,
     hiddenImages: options.edits?.hiddenImages,

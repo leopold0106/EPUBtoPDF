@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { app, BrowserWindow, ipcMain, protocol, shell } from 'electron'
+import { FONT_SCHEME } from '@shared/fonts'
 import { IpcChannels, type AppInfo } from '@shared/ipc'
 import { registerBookIpc } from './books'
 import { runCli } from './cli'
@@ -7,6 +8,8 @@ import { parseCliArgs } from './cli-args'
 import { registerConvertIpc } from './convert'
 import { library } from './epub/library'
 import { EPUB_SCHEME, handleResourceRequest } from './epub/protocol'
+import { fontRegistry, registerFontIpc } from './fonts'
+import { handleFontRequest } from './fonts/registry'
 import { findEpubArg } from './launch'
 import { registerSettingsIpc } from './settings'
 
@@ -15,6 +18,10 @@ protocol.registerSchemesAsPrivileged([
   {
     scheme: EPUB_SCHEME,
     privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true }
+  },
+  {
+    scheme: FONT_SCHEME,
+    privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true }
   }
 ])
 
@@ -98,6 +105,7 @@ app.on('second-instance', (_event, argv, cwd) => {
 app.whenReady().then(async () => {
   if (!primary) return
   protocol.handle(EPUB_SCHEME, (request) => handleResourceRequest(request.url, library.get))
+  protocol.handle(FONT_SCHEME, (request) => handleFontRequest(request.url, fontRegistry()))
 
   if (cli) {
     if ('error' in cli) {
@@ -114,6 +122,7 @@ app.whenReady().then(async () => {
   registerBookIpc()
   registerConvertIpc()
   registerSettingsIpc()
+  registerFontIpc()
   createMainWindow()
 
   app.on('activate', () => {
