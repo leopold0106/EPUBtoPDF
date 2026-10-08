@@ -1,0 +1,35 @@
+{
+  "name": "epubtopdf",
+  "productName": "EPUBtoPDF",
+  "version": "0.1.0",
+  "description": "EPUB 파일을 원하는 조판 설정으로 PDF로 변환하는 데스크톱 앱",
+  "main": "./out/main/index.js",
+  "author": "leopold0106",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
+    "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
+    "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "test": "vitest run",
+    "build:win": "npm run build && electron-builder --win",
+    "build:dir": "npm run build && electron-builder --dir"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "typescript": "~5.9.3",
+    "vite": "^7.3.7",
+    "vitest": "^4.1.11"
+  }
+}

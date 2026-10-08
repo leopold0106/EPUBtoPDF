@@ -18,3 +18,8 @@ Thumbs.db
 
 # Outputs
 *.pdf
+
+# Electron build output
+out/
+dist/
+*.tsbuildinfo
