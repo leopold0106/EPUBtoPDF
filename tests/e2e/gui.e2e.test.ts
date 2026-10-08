@@ -92,6 +92,24 @@ describe('앱 화면', () => {
     await shot('4-preset')
   })
 
+  it('글꼴 칸은 글자를 모두 지울 수 있고, 한국어 이름으로 고를 수 있다', async () => {
+    const input = win.getByRole('combobox', { name: '글꼴', exact: true })
+    await input.click()
+    await input.press('Control+a')
+    await input.press('Backspace')
+    expect(await input.inputValue()).toBe('')
+    await input.pressSequentially('바탕')
+    await input.press('Enter')
+    await expect.poll(() => input.inputValue()).toBe('바탕')
+    // 칸을 비운 채로 나가면 원래 글꼴로 돌아간다.
+    await input.click()
+    await input.press('Control+a')
+    await input.press('Backspace')
+    await win.locator('.typo-summary').click()
+    await expect.poll(() => input.inputValue()).toBe('바탕')
+    await shot('5-font-picker')
+  })
+
   it('PDF로 변환한다', async () => {
     const out = join(dir, 'out.pdf')
     await app.evaluate(({ dialog }, path) => {
@@ -101,6 +119,6 @@ describe('앱 화면', () => {
     await win.locator('.message--success').waitFor({ timeout: 60000 })
     expect(await win.textContent('.message--success')).toMatch(/변환을 마쳤습니다\. \d+쪽 · 책갈피 7개/)
     expect(existsSync(out)).toBe(true)
-    await shot('5-converted')
+    await shot('6-converted')
   })
 })

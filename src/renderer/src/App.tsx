@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { BookSummary } from '@shared/book'
 import type { BookEdits } from '@shared/edits'
+import { KOREAN_FONT_NAMES } from '@shared/font-names'
+import type { UserFont } from '@shared/fonts'
 import type { AppInfo, ConvertProgress, ConvertResult, Result } from '@shared/ipc'
 import type { ImageInfo } from '@shared/render'
 import { DEFAULT_SETTINGS } from '@shared/settings'
@@ -8,6 +10,7 @@ import { computeTypography, validateSettings } from '@shared/typography'
 import { ImagePanel } from './components/ImagePanel'
 import { PreviewPane } from './components/PreviewPane'
 import { FontExtras } from './components/FontExtras'
+import type { FontOption } from './components/FontPicker'
 import { PresetBar } from './components/PresetBar'
 import { SettingsPanel } from './components/SettingsPanel'
 import { useFonts } from './hooks/useFonts'
@@ -23,6 +26,28 @@ const STAGE_LABELS: Record<ConvertProgress['stage'], string> = {
 
 /** 시스템 글꼴 목록을 못 읽었을 때 보여줄 Windows 기본 한글 글꼴. */
 const COMMON_FONTS = ['Malgun Gothic', 'Batang', 'BatangChe', 'Dotum', 'Gulim', 'Gungsuh']
+
+/**
+ * 글꼴 고르기 목록: 추가한 글꼴 → 한글 글꼴(한국어 이름 순) → 그 밖의 설치된 글꼴.
+ * 설치된 글꼴 목록을 못 읽으면 Windows 기본 한글 글꼴만 보여준다.
+ */
+function buildFontOptions(user: UserFont[], system: string[] | null): FontOption[] {
+  const installed = system?.length ? system : COMMON_FONTS
+  const userFamilies = new Set(user.map((f) => f.family))
+  const out: FontOption[] = []
+  const seen = new Set<string>()
+  for (const f of user) {
+    if (seen.has(f.family)) continue
+    seen.add(f.family)
+    out.push({ family: f.family, localized: f.localizedFamily, group: 'user' })
+  }
+  const korean = installed
+    .filter((f) => KOREAN_FONT_NAMES[f] && !userFamilies.has(f))
+    .sort((a, b) => KOREAN_FONT_NAMES[a]!.localeCompare(KOREAN_FONT_NAMES[b]!, 'ko'))
+  for (const f of korean) out.push({ family: f, group: 'korean' })
+  for (const f of installed) if (!KOREAN_FONT_NAMES[f] && !userFamilies.has(f)) out.push({ family: f, group: 'other' })
+  return out
+}
 
 type SidebarTab = 'settings' | 'images'
 
@@ -66,10 +91,7 @@ export default function App(): React.JSX.Element {
   const [lineCounts, setLineCounts] = useState<Map<number, number>>(new Map())
   const { settings, update, replace } = useSettings()
   const fonts = useFonts()
-  const fontNames = useMemo(
-    () => [...new Set([...fonts.user.map((f) => f.family), ...(fonts.system?.length ? fonts.system : COMMON_FONTS)])],
-    [fonts.user, fonts.system]
-  )
+  const fontOptions = useMemo(() => buildFontOptions(fonts.user, fonts.system), [fonts.user, fonts.system])
 
   const typography = useMemo(() => computeTypography(settings), [settings])
   const issues = useMemo(() => validateSettings(settings, typography), [settings, typography])
@@ -279,7 +301,7 @@ export default function App(): React.JSX.Element {
                 issues={issues}
                 onChange={update}
                 onReset={() => replace(DEFAULT_SETTINGS)}
-                fontNames={fontNames}
+                fontOptions={fontOptions}
                 header={<PresetBar settings={settings} onApply={replace} />}
                 fontExtras={
                   <FontExtras
