@@ -1,7 +1,7 @@
 /** 책 열기·닫기 IPC. */
 
 import { createHash } from 'node:crypto'
-import { readFile, rm } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import { hasEdits, normalizeEdits, type BookEdits } from '@shared/edits'
@@ -12,8 +12,15 @@ import { library } from './epub/library'
 import { openEpub, type EpubBook } from './epub/parse'
 import { JsonStore } from './store'
 
+/** 파일마다 저장소를 하나만 둔다. 그래야 같은 파일에 대한 쓰기·지우기가 차례대로 실행된다. */
+const editsStores = new Map<string, JsonStore>()
+
 function editsStore(book: EpubBook | undefined): JsonStore | undefined {
-  return book?.contentHash ? new JsonStore(join(app.getPath('userData'), 'edits', `${book.contentHash}.json`)) : undefined
+  if (!book?.contentHash) return undefined
+  const file = join(app.getPath('userData'), 'edits', `${book.contentHash}.json`)
+  let store = editsStores.get(file)
+  if (!store) editsStores.set(file, (store = new JsonStore(file)))
+  return store
 }
 
 export async function openBookFile(path: string): Promise<Result<BookSummary>> {
@@ -79,6 +86,6 @@ export function registerBookIpc(): void {
     if (!store) return
     const edits = normalizeEdits(rawEdits)
     if (hasEdits(edits)) await store.write(edits)
-    else await rm(store.file, { force: true })
+    else await store.remove()
   })
 }
