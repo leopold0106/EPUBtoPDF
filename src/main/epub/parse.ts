@@ -54,6 +54,8 @@ export class EpubBook {
   readonly id = randomUUID().replace(/-/g, '')
   /** 디스크에서 연 경우 원본 파일 경로. 저장 위치 기본값에 쓴다. */
   sourcePath?: string
+  /** 파일 내용의 해시. 같은 책을 다시 열었을 때 편집 내용을 찾는 데 쓴다. */
+  contentHash?: string
 
   constructor(
     readonly fileName: string,

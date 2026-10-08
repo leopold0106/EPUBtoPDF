@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { BookEdits } from '@shared/edits'
 import type { PreviewRequest, PreviewResult } from '@shared/ipc'
 import type { Settings } from '@shared/settings'
@@ -30,7 +30,8 @@ export function usePreview({ bookId, settings, edits, request, enabled, delayMs 
   const again = useRef(false)
   const generation = useRef(0)
 
-  const key = JSON.stringify([bookId, settings, edits, request, enabled])
+  // 고친 본문이 길 수 있으므로 입력이 바뀔 때만 다시 계산한다.
+  const key = useMemo(() => JSON.stringify([bookId, settings, edits, request, enabled]), [bookId, settings, edits, request, enabled])
 
   useEffect(() => {
     // 다른 책으로 바뀌면 이전 결과를 버린다.

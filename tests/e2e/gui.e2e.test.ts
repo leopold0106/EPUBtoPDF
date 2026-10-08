@@ -4,12 +4,14 @@
  */
 
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { _electron, type ElectronApplication, type Page } from 'playwright-core'
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
+import type { TextItem } from 'pdfjs-dist/types/src/display/api'
 import { buildSampleBook } from '../fixtures/sample-book'
 
 const root = resolve(__dirname, '../..')
@@ -110,6 +112,38 @@ describe('앱 화면', () => {
     await shot('5-font-picker')
   })
 
+  it('본문 편집에서 그림 설명을 지우고 새 문단을 넣는다', async () => {
+    await win.getByRole('button', { name: '본문 편집' }).click()
+    const editor = win.frameLocator('.editor__frame')
+    const caption = editor.locator('figcaption')
+    await caption.waitFor({ timeout: 20000 })
+    // 설명 글자만 정확히 골라 지운다 (세 번 누르면 다음 문단 경계까지 골라져 문단이 합쳐진다).
+    await caption.click()
+    await caption.evaluate((el) => {
+      const range = el.ownerDocument.createRange()
+      range.selectNodeContents(el)
+      el.ownerDocument.getSelection()!.removeAllRanges()
+      el.ownerDocument.getSelection()!.addRange(range)
+    })
+    await win.keyboard.press('Delete')
+    await expect.poll(() => caption.textContent()).toBe('')
+    await editor.locator('h1').click()
+    await win.keyboard.press('End')
+    await win.keyboard.press('Enter')
+    await win.keyboard.type('편집기에서 넣은 문단')
+    await shot('6-editor')
+    // 저장되기 전에 바로 미리보기로 돌아가도 편집이 남는다.
+    await win.getByRole('button', { name: '미리보기' }).click()
+    await expect.poll(() => win.getByRole('button', { name: /본문 편집/ }).textContent()).toBe('본문 편집 (1)')
+    // 편집 내용은 다음에 같은 책을 열 때를 위해 저장된다.
+    await expect
+      .poll(async () => {
+        const files = await readdir(join(dir, 'userdata/edits')).catch(() => [])
+        return files.length ? readFile(join(dir, 'userdata/edits', files[0]!), 'utf8') : ''
+      }, { timeout: 10000 })
+      .toContain('편집기에서 넣은 문단')
+  })
+
   it('PDF로 변환한다', async () => {
     const out = join(dir, 'out.pdf')
     await app.evaluate(({ dialog }, path) => {
@@ -119,6 +153,14 @@ describe('앱 화면', () => {
     await win.locator('.message--success').waitFor({ timeout: 60000 })
     expect(await win.textContent('.message--success')).toMatch(/변환을 마쳤습니다\. \d+쪽 · 책갈피 7개/)
     expect(existsSync(out)).toBe(true)
-    await shot('6-converted')
+    const pdf = await getDocument({ data: new Uint8Array(await readFile(out)) }).promise
+    let text = ''
+    for (let n = 1; n <= pdf.numPages; n++) {
+      text += (await (await pdf.getPage(n)).getTextContent()).items.map((i) => (i as TextItem).str).join('')
+    }
+    text = text.replace(/\s+/g, '')
+    expect(text).toContain('편집기에서넣은문단')
+    expect(text).not.toContain('그림1.새벽의강')
+    await shot('7-converted')
   })
 })

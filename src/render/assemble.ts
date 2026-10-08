@@ -30,7 +30,7 @@ export function isImageElement(el: Element): boolean {
 }
 
 /** 장 문서에서 본문으로 옮길 부분. 본문이 SVG 하나뿐인 문서면 그 SVG. */
-function contentRoot(source: Document): Element {
+export function contentRoot(source: Document): Element {
   const root = source.documentElement
   return source.body ?? root
 }
@@ -318,7 +318,8 @@ export function assembleBook(
     // 그림 번호는 원본 순서대로 매긴다 (아래에서 요소를 지우기 전에).
     const toHide: Element[] = []
     ;[...section.querySelectorAll('*')].filter(isImageElement).forEach((el, n) => {
-      const key = imageKey(chapter.index, n)
+      // 본문을 고친 장에는 처음 번호가 속성으로 남아 있다.
+      const key = el.getAttribute(IMAGE_KEY_ATTR) ?? imageKey(chapter.index, n)
       el.setAttribute(IMAGE_KEY_ATTR, key)
       if (hidden.has(key)) toHide.push(el)
     })
@@ -444,6 +445,17 @@ function markTocTargets(doc: Document, payload: AssemblePayload, book: BookConte
   if (layer.childElementCount > 0) doc.body.appendChild(layer)
 }
 
+/**
+ * 장 문서의 그림에 번호 속성을 붙인다 (본문 편집을 시작할 때). 이미 붙어 있으면 그대로 둔다.
+ * 번호는 assembleBook·listImages와 같은 순서로 매긴다.
+ */
+export function stampImageKeys(source: Document, spineIndex: number): void {
+  const root = contentRoot(source)
+  ;[root, ...root.querySelectorAll('*')].filter(isImageElement).forEach((el, n) => {
+    if (!el.hasAttribute(IMAGE_KEY_ATTR)) el.setAttribute(IMAGE_KEY_ATTR, imageKey(spineIndex, n))
+  })
+}
+
 /** 장 문서들에 든 그림 목록. 번호는 assembleBook이 매기는 것과 같다. */
 export function listImages(payload: ListImagesPayload, chapterTexts: string[], parser: DOMParser): ImageInfo[] {
   const images: ImageInfo[] = []
@@ -453,7 +465,7 @@ export function listImages(payload: ListImagesPayload, chapterTexts: string[], p
     found.forEach((el, n) => {
       const href = imageHref(el)
       images.push({
-        key: imageKey(chapter.index, n),
+        key: el.getAttribute(IMAGE_KEY_ATTR) ?? imageKey(chapter.index, n),
         spineIndex: chapter.index,
         src: href ? (tryUrl(href, chapter.url)?.href ?? '') : '',
         alt: el.getAttribute('alt') ?? ''

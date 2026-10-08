@@ -41,11 +41,11 @@ export async function convertBook(
 const outputs = new Set<string>()
 
 export function registerConvertIpc(): void {
-  ipcMain.handle(IpcChannels.listImages, async (_event, bookId: unknown): Promise<Result<ImageInfo[]>> => {
+  ipcMain.handle(IpcChannels.listImages, async (_event, bookId: unknown, rawEdits: unknown): Promise<Result<ImageInfo[]>> => {
     const book = typeof bookId === 'string' ? library.get(bookId) : undefined
     if (!book) return { ok: false, error: '열린 책이 없습니다.' }
     try {
-      return { ok: true, value: await listBookImages(book) }
+      return { ok: true, value: await listBookImages(book, normalizeEdits(rawEdits).chapters) }
     } catch (err) {
       console.error(err)
       return { ok: false, error: `그림 목록을 만들지 못했습니다: ${err instanceof Error ? err.message : String(err)}` }

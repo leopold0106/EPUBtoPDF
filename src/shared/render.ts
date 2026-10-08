@@ -32,6 +32,8 @@ export interface AssemblePayload {
   markImages?: boolean
   /** 책갈피 표시를 둘 목차 항목. */
   tocTargets?: TocTarget[]
+  /** 본문을 고친 장: 장 위치 → 고친 문서. 있으면 원본 대신 쓴다. */
+  chapterOverrides?: Record<number, string>
   /** 인쇄 직전 다듬기 (render/typeset.ts). */
   typeset?: {
     /** 원본 스타일 유지 모드: 본문 글자 크기(px). */
@@ -77,6 +79,7 @@ export function imageKeyFromUrl(url: string | undefined): string | undefined {
 /** 그림 목록을 만들 때 넘기는 값. */
 export interface ListImagesPayload {
   chapters: AssembleChapter[]
+  chapterOverrides?: Record<number, string>
 }
 
 export interface ImageInfo {
