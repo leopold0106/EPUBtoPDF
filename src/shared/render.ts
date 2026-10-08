@@ -30,6 +30,14 @@ export interface AssemblePayload {
    * 링크 주소는 `previewImageUrl(key)`. 최종 PDF에는 쓰지 않는다.
    */
   markImages?: boolean
+  /** 인쇄 직전 다듬기 (render/typeset.ts). */
+  typeset?: {
+    /** 원본 스타일 유지 모드: 본문 글자 크기(px). */
+    bodyFontPx?: number
+    /** 줄 격자 맞춤: 줄 피치(px). */
+    gridPx?: number
+    gridPerChapter?: boolean
+  }
 }
 
 const PREVIEW_IMAGE_PREFIX = 'https://epubtopdf.invalid/image/'

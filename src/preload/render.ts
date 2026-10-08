@@ -14,6 +14,7 @@ import {
 } from '@shared/render'
 import { decodeText } from '@shared/text'
 import { assembleBook, listImages as findImages, waitForResources } from '../render/assemble'
+import { typeset } from '../render/typeset'
 
 function readChapters(chapters: AssembleChapter[]): Promise<string[]> {
   return Promise.all(
@@ -28,6 +29,11 @@ function readChapters(chapters: AssembleChapter[]): Promise<string[]> {
 async function assemble(payload: AssemblePayload): Promise<AssembleResult> {
   const result = assembleBook(document, payload, await readChapters(payload.chapters), new DOMParser())
   result.warnings.push(...(await waitForResources(document)))
+  if (payload.typeset) {
+    typeset(document, payload.typeset)
+    // 글자 크기가 바뀌면 새 글꼴 파일을 불러올 수 있다.
+    await document.fonts.ready
+  }
   return result
 }
 

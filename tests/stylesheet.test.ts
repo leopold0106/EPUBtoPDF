@@ -135,9 +135,27 @@ describe('buildStylesheet: 위첨자·아래첨자', () => {
 
 describe('buildStylesheet: 문단과 링크', () => {
   it('문단은 위아래 여백만 정하고 좌우 여백은 원본에 맡긴다', () => {
-    const out = css(makeSettings({ text: { paragraphSpacing: 1 } }))
-    expect(out).toMatch(/p \{ margin-top: 0 !important; margin-bottom: [\d.]+px !important;/)
+    const out = css(makeSettings({ layout: { epubStyles: 'ignore' }, text: { paragraphSpacing: 1 } }))
+    expect(out).toMatch(/p, \.epubtopdf-body-text \{ margin-top: 0 !important; margin-bottom: [\d.]+px !important; \}/)
     expect(out).not.toMatch(/p \{ margin: /)
+  })
+
+  it('원본 유지 모드에서는 문단 간격을 본문 문단에만 준다 (특수 문단은 원본 여백)', () => {
+    for (const snapToGrid of [true, false]) {
+      const out = css(makeSettings({ layout: { epubStyles: 'keep' }, text: { snapToGrid } }))
+      expect(out).toMatch(/\n\.epubtopdf-body-text \{ margin-top: 0 !important;/)
+      expect(out).not.toContain('p, .epubtopdf-body-text { margin-top')
+    }
+  })
+
+  it('원본 유지 모드에서는 문단 글자 크기를 강제하지 않고(렌더링 창이 비율로 맞춤), 무시 모드에서는 강제한다', () => {
+    expect(css(makeSettings({ layout: { epubStyles: 'keep' } }))).not.toContain('body, p, div, li, dd, dt, blockquote { font-size')
+    expect(css(makeSettings({ layout: { epubStyles: 'ignore' } }))).toContain('body, p, div, li, dd, dt, blockquote { font-size')
+  })
+
+  it('들여쓰기·정렬·글꼴은 본문 문단에 적용한다', () => {
+    const out = css(makeSettings({ text: { textIndentEm: 1.5, align: 'start' } }))
+    expect(out).toMatch(/\.epubtopdf-body-text \{ font-family: [^}]+; text-indent: 1\.5em !important; text-align: start !important; \}/)
   })
 
   it('링크 색은 본문 색을 따르되 원본 CSS보다 우선하지 않는다', () => {
@@ -152,7 +170,7 @@ describe('원본 스타일 무시 모드의 간격', () => {
     const s = ignore()
     const line = computeTypography(s).lineHeightPx
     const out = css(s)
-    expect(out).toContain(`margin-bottom: ${line}px !important; text-indent:`)
+    expect(out).toContain(`p, .epubtopdf-body-text { margin-top: 0 !important; margin-bottom: ${line}px !important; }`)
     expect(out).toMatch(new RegExp(`h1, h2, h3, h4, h5, h6 \\{ margin-top: ${line}px !important; margin-bottom: ${line}px !important; \\}`))
     expect(out).toContain(`:is(blockquote, ul, ol, dl, table, figure, pre) { margin-top: ${line}px; margin-bottom: ${line}px; }`)
   })

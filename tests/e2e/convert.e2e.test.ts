@@ -15,7 +15,8 @@ import { getDocument, type PDFDocumentProxy } from 'pdfjs-dist/legacy/build/pdf.
 import type { TextItem } from 'pdfjs-dist/types/src/display/api'
 import { buildSampleBook } from '../fixtures/sample-book'
 import type { BookEdits } from '@shared/edits'
-import type { SettingsPatch } from '../helpers'
+import { computeTypography } from '@shared/typography'
+import { makeSettings, type SettingsPatch } from '../helpers'
 
 const run = promisify(execFile)
 const root = resolve(__dirname, '../..')
@@ -122,6 +123,29 @@ describe('명령줄 변환', () => {
     for (let n = start + 2; n <= end - 1; n++) counts.push(await bodyLines(pdf, n, 20, 20))
     expect(counts.length).toBeGreaterThanOrEqual(3)
     expect(counts).toEqual(counts.map(() => 24))
+  })
+
+  it('줄 격자 맞춤: 그림·제목·시·인용 뒤에도 본문 글줄이 모두 격자 위에 있다 (표 안 글자 제외)', async () => {
+    const settings: SettingsPatch = { text: { sizing: 'linesPerPage', linesPerPage: 24 } }
+    const pdf = await convert('grid', settings)
+    const t = computeTypography(makeSettings(settings))
+    const pitch = (t.lineHeightPx * 72) / 96
+    const offGrid: string[] = []
+    for (let n = 1; n <= pdf.numPages; n++) {
+      const items = await pageText(pdf, n)
+      if (items.some((i) => i.str.includes('품목'))) continue // 표가 있는 쪽
+      const top = (await pdf.getPage(n)).view[3]! - 20 * MM
+      // 본문 크기 글자의 기준선 (위첨자·작은 글씨·제목 제외)
+      const ds = [...new Set(items.filter((i) => Math.abs(i.height - t.fontSizePt) < 0.3).map((i) => top - (i.transform[5] as number)))]
+      if (ds.length === 0) continue
+      const first = Math.min(...ds)
+      for (const d of ds) {
+        const r = (d - first) % pitch
+        // PDF의 글자 위치는 1px(0.75pt) 단위로 반올림된다.
+        if (r > 0.8 && pitch - r > 0.8) offGrid.push(`${n}쪽 ${d.toFixed(1)}`)
+      }
+    }
+    expect(offGrid).toEqual([])
   })
 
   it('원본 스타일 무시, B6 가로 방향', async () => {

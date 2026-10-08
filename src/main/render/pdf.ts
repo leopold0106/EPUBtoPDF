@@ -77,7 +77,12 @@ async function renderNow(book: EpubBook, settings: Settings, options: RenderOpti
     lang: book.metadata.language,
     dir: book.direction === 'default' ? undefined : book.direction,
     hiddenImages: options.edits?.hiddenImages,
-    markImages: options.markImages
+    markImages: options.markImages,
+    typeset: {
+      bodyFontPx: settings.layout.epubStyles === 'keep' ? (typography.fontSizePt * 96) / 72 : undefined,
+      gridPx: settings.text.snapToGrid ? typography.lineHeightPx : undefined,
+      gridPerChapter: settings.layout.chapterBreak
+    }
   }
 
   const win = createRenderWindow(typography.bodyWidthPx)

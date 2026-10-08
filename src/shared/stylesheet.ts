@@ -14,6 +14,12 @@ import { cssNumber } from './units'
 /** 각 장을 감싸는 요소의 클래스. HTML 조립 단계와 공유한다. */
 export const CHAPTER_CLASS = 'epubtopdf-chapter'
 
+/**
+ * 본문 문단에 붙는 클래스. 렌더링 창이 원본에서 가장 많이 쓰인 문단 모양을 찾아 붙인다.
+ * 들여쓰기·정렬·글꼴 설정은 이 문단에만 적용해, 원본의 특수 문단은 원래 모양을 지킨다.
+ */
+export const BODY_TEXT_CLASS = 'epubtopdf-body-text'
+
 export interface FontFaceSource {
   family: string
   /** 앱 내부 프로토콜 URL (예: `app-font://...`). */
@@ -123,6 +129,7 @@ export function buildStylesheet(s: Settings, t: Typography, ctx: StylesheetConte
   const line = t.lineHeightPx
   const grid = text.snapToGrid
   const imp = ' !important'
+  // 그리드 정렬은 렌더링 창(typeset.ts)이 하므로 여기서는 orphans/widows와 제목 높이만 맞춘다.
   const out: string[] = []
 
   for (const face of ctx.fontFaces ?? []) {
@@ -136,20 +143,37 @@ export function buildStylesheet(s: Settings, t: Typography, ctx: StylesheetConte
 
   if (s.layout.epubStyles === 'ignore') out.push(...baseRules())
 
-  // 본문: 사용자가 정한 글꼴·크기는 문단 단위 요소까지 강제한다.
-  // span, small, sup, td, 제목 등은 원본의 상대 크기(em, %)를 유지한다.
+  const body = `.${BODY_TEXT_CLASS}`
+  const fonts = fontFamilyList(s)
+  const gap = px(paragraphGap(s, line))
+  const indent = `${cssNumber(text.textIndentEm)}em`
+  const ignore = s.layout.epubStyles === 'ignore'
+
   out.push(
     `html { font-size: ${pt(t.fontSizePt)}${imp}; }`,
     `html, body { margin: 0${imp}; padding: 0${imp}; }`,
-    `body { font-family: ${fontFamilyList(s)}${imp}; text-align: ${text.align}${imp};` +
+    `body { font-family: ${fonts}${imp}; font-size: ${pt(t.fontSizePt)}${imp}; text-align: ${text.align};` +
       ` word-break: ${text.wordBreak}${imp}; line-break: strict; overflow-wrap: anywhere;` +
       ` orphans: ${grid ? 1 : 2}; widows: ${grid ? 1 : 2}; }`,
-    `body, p, div, li, dd, dt, blockquote { font-size: ${pt(t.fontSizePt)}${imp}; }`,
-    // 좌우 여백은 원본을 따른다 (시, 인용 등의 들여쓰기).
-    `p { margin-top: 0${imp}; margin-bottom: ${px(paragraphGap(s, line))}${imp}; text-indent: ${cssNumber(text.textIndentEm)}em${imp}; }`,
-    // 링크는 본문 색으로. 특이도 0이라 원본 CSS가 링크 모양을 정했으면 그쪽이 이긴다.
-    `:where(a:link, a:visited) { color: inherit; text-decoration: none; }`
+    // 본문 문단: 설정한 글꼴·들여쓰기·정렬. 코드 글꼴은 그대로 둔다.
+    `${body} { font-family: ${fonts}${imp}; text-indent: ${indent}${imp}; text-align: ${text.align}${imp}; }`,
+    `${body} :not(code, kbd, samp, tt) { font-family: ${fonts}${imp}; }`
   )
+
+  if (ignore) {
+    // 원본 스타일이 없으므로 문단 단위 요소는 모두 같은 크기, 문단은 모두 본문 모양.
+    out.push(
+      `body, p, div, li, dd, dt, blockquote { font-size: ${pt(t.fontSizePt)}${imp}; }`,
+      `p { text-indent: ${indent}${imp}; text-align: ${text.align}${imp}; }`
+    )
+  }
+  // 원본 유지 모드의 글자 크기는 렌더링 창이 원본 비율대로 맞춘다 (typeset.ts).
+
+  // 문단 간격. 원본 무시 모드에서는 모든 문단, 유지 모드에서는 본문 문단만 (특수 문단의 위아래 여백은
+  // 원본을 따르고, 줄 격자 맞춤이면 렌더링 창이 줄 단위로 올린다). 좌우 여백은 늘 원본을 따른다.
+  out.push(`${ignore ? `p, ${body}` : body} { margin-top: 0${imp}; margin-bottom: ${gap}${imp}; }`)
+  // 링크는 본문 색으로. 특이도 0이라 원본 CSS가 링크 모양을 정했으면 그쪽이 이긴다.
+  out.push(`:where(a:link, a:visited) { color: inherit; text-decoration: none; }`)
 
   // 줄 높이: 제목을 뺀 모든 요소를 같은 줄 피치로 맞춘다.
   out.push(
@@ -183,7 +207,9 @@ export function buildStylesheet(s: Settings, t: Typography, ctx: StylesheetConte
   out.push(
     `img, svg, video { max-width: 100%${imp}; max-height: ${px(t.bodyHeightPx)}${imp}; height: auto; object-fit: contain; }`,
     `img, svg, figure, table { break-inside: avoid; }`,
-    `${HEADINGS} { break-after: avoid; }`
+    `${HEADINGS} { break-after: avoid; }`,
+    // 제목 바로 뒤 문단이 쪽 끝에 한 줄만 남지 않게 한다 (그러면 제목도 함께 다음 쪽으로 간다).
+    `:is(${HEADINGS}) + * { orphans: 2; }`
   )
 
   if (s.layout.chapterBreak) {
