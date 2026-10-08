@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { openEpub } from '../src/main/epub/parse'
-import { handleResourceRequest, parseResourceUrl, resourceUrl } from '../src/main/epub/protocol'
+import { RENDER_PAGE_PATH } from '@shared/render'
+import { handleResourceRequest, parseResourceUrl, RENDER_PAGE_CSP, resourceUrl } from '../src/main/epub/protocol'
 import { buildSampleBook } from './fixtures/sample-book'
 
 describe('리소스 URL', () => {
@@ -45,5 +46,20 @@ describe('handleResourceRequest', () => {
     expect((await handleResourceRequest(resourceUrl('nope', 'OEBPS/content.opf'), find)).status).toBe(404)
     expect((await handleResourceRequest(resourceUrl(book.id, 'OEBPS/none.png'), find)).status).toBe(404)
     expect((await handleResourceRequest('epub://' + book.id + '/../../etc/passwd', find)).status).toBe(404)
+  })
+})
+
+describe('렌더링 문서', () => {
+  it('열린 책 주소 아래에서 스크립트를 막는 CSP와 함께 빈 문서를 돌려준다', async () => {
+    const book = await openEpub(await buildSampleBook(), 'a.epub')
+    const res = await handleResourceRequest(resourceUrl(book.id, RENDER_PAGE_PATH), (id) => (id === book.id ? book : undefined))
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-security-policy')).toBe(RENDER_PAGE_CSP)
+    expect(RENDER_PAGE_CSP).toContain("script-src 'none'")
+    expect(await res.text()).toContain('<body></body>')
+  })
+
+  it('없는 책이면 404', async () => {
+    expect((await handleResourceRequest(resourceUrl('nope', RENDER_PAGE_PATH), () => undefined)).status).toBe(404)
   })
 })

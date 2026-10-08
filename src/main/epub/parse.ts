@@ -52,6 +52,8 @@ const NCX_TYPE = 'application/x-dtbncx+xml'
 
 export class EpubBook {
   readonly id = randomUUID().replace(/-/g, '')
+  /** 디스크에서 연 경우 원본 파일 경로. 저장 위치 기본값에 쓴다. */
+  sourcePath?: string
 
   constructor(
     readonly fileName: string,

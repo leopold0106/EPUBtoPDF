@@ -142,7 +142,10 @@ export function buildStylesheet(s: Settings, t: Typography, ctx: StylesheetConte
       ` word-break: ${text.wordBreak}${imp}; line-break: strict; overflow-wrap: anywhere;` +
       ` orphans: ${grid ? 1 : 2}; widows: ${grid ? 1 : 2}; }`,
     `body, p, div, li, dd, dt, blockquote { font-size: ${pt(t.fontSizePt)}${imp}; }`,
-    `p { margin: 0 0 ${px(paragraphGap(s, line))} 0${imp}; text-indent: ${cssNumber(text.textIndentEm)}em${imp}; }`
+    // 좌우 여백은 원본을 따른다 (시, 인용 등의 들여쓰기).
+    `p { margin-top: 0${imp}; margin-bottom: ${px(paragraphGap(s, line))}${imp}; text-indent: ${cssNumber(text.textIndentEm)}em${imp}; }`,
+    // 링크는 본문 색으로. 특이도 0이라 원본 CSS가 링크 모양을 정했으면 그쪽이 이긴다.
+    `:where(a:link, a:visited) { color: inherit; text-decoration: none; }`
   )
 
   // 줄 높이: 제목을 뺀 모든 요소를 같은 줄 피치로 맞춘다.

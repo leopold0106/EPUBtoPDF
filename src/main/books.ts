@@ -12,6 +12,7 @@ import { openEpub } from './epub/parse'
 export async function openBookFile(path: string): Promise<Result<BookSummary>> {
   try {
     const book = await openEpub(await readFile(path), basename(path))
+    book.sourcePath = path
     library.add(book)
     return { ok: true, value: book.toSummary() }
   } catch (err) {

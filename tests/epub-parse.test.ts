@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import JSZip from 'jszip'
-import { decodeText } from '../src/main/epub/archive'
+import { decodeText } from '@shared/text'
 import { EpubError } from '../src/main/epub/errors'
 import { openEpub } from '../src/main/epub/parse'
 import { isExternalHref, normalizePath, resolveHref } from '../src/main/epub/paths'

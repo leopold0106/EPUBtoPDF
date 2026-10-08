@@ -3,6 +3,7 @@
  * 장(章) 문서를 이 주소로 열면 문서 안의 상대 경로(그림, CSS, 글꼴)가 그대로 동작한다.
  */
 
+import { RENDER_PAGE_PATH } from '@shared/render'
 import { EpubError } from './errors'
 import type { EpubBook } from './parse'
 
@@ -30,12 +31,41 @@ export function parseResourceUrl(url: string): { bookId: string; path: string } 
   return { bookId: parsed.hostname, path }
 }
 
+/**
+ * 렌더링 창이 여는 빈 문서. 책 내용은 preload가 채운다.
+ * 책에 들어 있을 수 있는 스크립트는 실행하지 않고, 외부 주소에서는 아무것도 불러오지 않는다.
+ */
+const RENDER_PAGE = `<!doctype html>
+<html><head><meta charset="utf-8"><title>EPUBtoPDF</title>
+<style>html { scrollbar-width: none; }</style>
+</head><body></body></html>`
+
+export const RENDER_PAGE_CSP = [
+  "default-src 'none'",
+  "script-src 'none'",
+  "style-src epub: 'unsafe-inline'",
+  'img-src epub: data: blob:',
+  'font-src epub: data:',
+  'media-src epub: data:',
+  'connect-src epub:'
+].join('; ')
+
 export async function handleResourceRequest(
   url: string,
   findBook: (id: string) => EpubBook | undefined
 ): Promise<Response> {
   const parsed = parseResourceUrl(url)
   const book = parsed && findBook(parsed.bookId)
+  if (book && parsed.path === RENDER_PAGE_PATH) {
+    return new Response(RENDER_PAGE, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Content-Security-Policy': RENDER_PAGE_CSP,
+        'Cache-Control': 'no-store'
+      }
+    })
+  }
   if (!parsed || !book || !book.hasResource(parsed.path)) {
     return new Response('Not found', { status: 404 })
   }

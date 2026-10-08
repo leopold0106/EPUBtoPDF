@@ -2,6 +2,9 @@ import { join } from 'node:path'
 import { app, BrowserWindow, ipcMain, protocol, shell } from 'electron'
 import { IpcChannels, type AppInfo } from '@shared/ipc'
 import { registerBookIpc } from './books'
+import { runCli } from './cli'
+import { parseCliArgs } from './cli-args'
+import { registerConvertIpc } from './convert'
 import { library } from './epub/library'
 import { EPUB_SCHEME, handleResourceRequest } from './epub/protocol'
 
@@ -61,10 +64,24 @@ if (process.platform === 'win32') {
   app.setAppUserModelId('com.leopold0106.epubtopdf')
 }
 
-app.whenReady().then(() => {
+const cli = parseCliArgs(process.argv)
+
+app.whenReady().then(async () => {
   protocol.handle(EPUB_SCHEME, (request) => handleResourceRequest(request.url, library.get))
+
+  if (cli) {
+    if ('error' in cli) {
+      console.error(cli.error)
+      app.exit(2)
+      return
+    }
+    app.exit(await runCli(cli))
+    return
+  }
+
   registerIpc()
   registerBookIpc()
+  registerConvertIpc()
   createMainWindow()
 
   app.on('activate', () => {
@@ -73,5 +90,6 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
+  // 명령줄 변환 중에는 렌더링 창을 닫아도 끝내지 않는다 (끝은 runCli가 정한다).
+  if (!cli && process.platform !== 'darwin') app.quit()
 })

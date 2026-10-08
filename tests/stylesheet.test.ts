@@ -132,3 +132,15 @@ describe('buildStylesheet: 위첨자·아래첨자', () => {
     expect(out.indexOf('body :is(sup, sub)')).toBeGreaterThan(out.indexOf('body, body :not('))
   })
 })
+
+describe('buildStylesheet: 문단과 링크', () => {
+  it('문단은 위아래 여백만 정하고 좌우 여백은 원본에 맡긴다', () => {
+    const out = css(makeSettings({ text: { paragraphSpacing: 1 } }))
+    expect(out).toMatch(/p \{ margin-top: 0 !important; margin-bottom: [\d.]+px !important;/)
+    expect(out).not.toMatch(/p \{ margin: /)
+  })
+
+  it('링크 색은 본문 색을 따르되 원본 CSS보다 우선하지 않는다', () => {
+    expect(css(makeSettings({}))).toContain(':where(a:link, a:visited) { color: inherit; text-decoration: none; }')
+  })
+})
