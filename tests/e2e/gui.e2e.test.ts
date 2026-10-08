@@ -81,8 +81,17 @@ describe('앱 화면', () => {
   it('쪽당 줄 수를 정하면 미리보기의 실측 줄 수가 따라온다', async () => {
     await win.click('label.choice__option:has-text("쪽당 줄 수 지정")')
     const lines = win.locator('.field:has(label:text-is("쪽당 줄 수")) input')
+    const probe = (): Promise<unknown> =>
+      win.evaluate(() => ({
+        value: [...document.querySelectorAll('.field')].find((f) => f.querySelector('label')?.textContent === '쪽당 줄 수')?.querySelector('input')?.value,
+        active: `${document.activeElement?.tagName}.${document.activeElement?.className}`,
+        hasFocus: document.hasFocus()
+      }))
+    const before = await probe()
     await lines.fill('22')
+    const afterFill = await probe()
     await lines.press('Enter')
+    const afterEnter = await probe()
     await win.evaluate(() => document.querySelector('[data-page="2"]')?.scrollIntoView())
     try {
       await win.getByText('쪽당 최대 22줄').waitFor({ timeout: 30000 })
@@ -101,7 +110,7 @@ describe('앱 화면', () => {
         scrollTop: document.querySelector('.pages')?.scrollTop,
         errors: [...document.querySelectorAll('.message--error')].map((e) => e.textContent)
       }))
-      throw new Error(`${(err as Error).message}\n화면 상태: ${JSON.stringify(state)}`)
+      throw new Error(`${(err as Error).message}\n화면 상태: ${JSON.stringify(state)}\n입력 과정: ${JSON.stringify({ before, afterFill, afterEnter })}`)
     }
     await shot('3-lines-per-page')
   })
