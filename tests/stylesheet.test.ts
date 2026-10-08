@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Settings } from '@shared/settings'
-import { buildStylesheet, CHAPTER_CLASS, cssString, fontFamilyList, paragraphGap } from '@shared/stylesheet'
+import { buildStylesheet, CHAPTER_CLASS, cssString, fontFamilyList, headingGap, paragraphGap } from '@shared/stylesheet'
 import { computeTypography } from '@shared/typography'
 import { makeSettings } from './helpers'
 
@@ -142,5 +142,44 @@ describe('buildStylesheet: 문단과 링크', () => {
 
   it('링크 색은 본문 색을 따르되 원본 CSS보다 우선하지 않는다', () => {
     expect(css(makeSettings({}))).toContain(':where(a:link, a:visited) { color: inherit; text-decoration: none; }')
+  })
+})
+
+describe('원본 스타일 무시 모드의 간격', () => {
+  const ignore = (text: Partial<Settings['text']> = {}) => makeSettings({ layout: { epubStyles: 'ignore' }, text })
+
+  it('기본값: 문단 사이와 제목 위아래에 한 줄씩 띄운다', () => {
+    const s = ignore()
+    const line = computeTypography(s).lineHeightPx
+    const out = css(s)
+    expect(out).toContain(`margin-bottom: ${line}px !important; text-indent:`)
+    expect(out).toMatch(new RegExp(`h1, h2, h3, h4, h5, h6 \\{ margin-top: ${line}px !important; margin-bottom: ${line}px !important; \\}`))
+    expect(out).toContain(`:is(blockquote, ul, ol, dl, table, figure, pre) { margin-top: ${line}px; margin-bottom: ${line}px; }`)
+  })
+
+  it('장 첫머리 제목은 위 간격을 두지 않는다', () => {
+    expect(css(ignore())).toContain('h1, h2, h3, h4, h5, h6:first-child { margin-top: 0 !important; }')
+  })
+
+  it('줄 격자 맞춤이 꺼져 있어도 무시 모드에서는 간격을 둔다', () => {
+    const s = ignore({ snapToGrid: false, headingSpacing: 1.5 })
+    const line = computeTypography(s).lineHeightPx
+    expect(headingGap(s, line)).toBeCloseTo(line * 1.5)
+    expect(paragraphGap(s, line)).toBe(line)
+  })
+
+  it('원본 스타일 유지 + 줄 격자 맞춤 꺼짐이면 제목 간격은 원본을 따른다', () => {
+    const s = makeSettings({ layout: { epubStyles: 'keep' }, text: { snapToGrid: false } })
+    expect(headingGap(s, 20)).toBeUndefined()
+    expect(css(s)).not.toMatch(/h6 \{ margin-top:/)
+    expect(css(s)).not.toContain(':is(blockquote')
+  })
+
+  it('원본 스타일 유지 모드의 문단 간격 기본값은 0', () => {
+    expect(paragraphGap(makeSettings({ layout: { epubStyles: 'keep' } }), 20)).toBe(0)
+  })
+
+  it('제목 간격 0줄도 쓸 수 있다', () => {
+    expect(css(ignore({ headingSpacing: 0 }))).toContain('h1, h2, h3, h4, h5, h6 { margin-top: 0px !important; margin-bottom: 0px !important; }')
   })
 })

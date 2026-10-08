@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { PAPER_SIZES } from '@shared/paper'
-import { DEFAULT_SETTINGS, normalizeSettings, resolvePageSize, type Settings } from '@shared/settings'
+import { DEFAULT_SETTINGS, effectiveParagraphSpacing, normalizeSettings, resolvePageSize, type Settings } from '@shared/settings'
 
 describe('용지 규격', () => {
   it('id가 겹치지 않고 세로 방향(너비 ≤ 높이)으로 정의되어 있다', () => {
@@ -87,5 +87,25 @@ describe('normalizeSettings', () => {
     const s = normalizeSettings(input)
     input.text.fontSizePt = 20
     expect(s.text.fontSizePt).toBe(DEFAULT_SETTINGS.text.fontSizePt)
+  })
+})
+
+describe('문단 간격 자동', () => {
+  it('auto는 원본 스타일 유지에서 0줄, 무시에서 1줄', () => {
+    const keep = normalizeSettings({ layout: { epubStyles: 'keep' } })
+    const ignore = normalizeSettings({ layout: { epubStyles: 'ignore' } })
+    expect(keep.text.paragraphSpacing).toBe('auto')
+    expect(effectiveParagraphSpacing(keep)).toBe(0)
+    expect(effectiveParagraphSpacing(ignore)).toBe(1)
+  })
+
+  it('숫자를 정하면 모드와 상관없이 그 값을 쓴다', () => {
+    expect(effectiveParagraphSpacing(normalizeSettings({ text: { paragraphSpacing: 2 }, layout: { epubStyles: 'ignore' } }))).toBe(2)
+    expect(effectiveParagraphSpacing(normalizeSettings({ text: { paragraphSpacing: 0 }, layout: { epubStyles: 'ignore' } }))).toBe(0)
+  })
+
+  it('잘못된 값은 auto, 범위를 넘으면 잘라낸다', () => {
+    expect(normalizeSettings({ text: { paragraphSpacing: 'abc' } }).text.paragraphSpacing).toBe('auto')
+    expect(normalizeSettings({ text: { paragraphSpacing: 99, headingSpacing: -1 } }).text).toMatchObject({ paragraphSpacing: 5, headingSpacing: 0 })
   })
 })

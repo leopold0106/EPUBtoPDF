@@ -43,8 +43,13 @@ export interface TextSettings {
   linesPerPage: number
   /** 줄 간격 배수 (글자 크기 대비 줄 높이). */
   lineHeight: number
-  /** 문단 사이 간격 (줄 단위). */
-  paragraphSpacing: number
+  /**
+   * 문단 사이 간격 (줄 단위). `auto`면 원본 스타일 유지 모드에서 0줄, 무시 모드에서 1줄.
+   * 무시 모드에서는 인용·목록·표·그림 위아래에도 같은 간격을 둔다.
+   */
+  paragraphSpacing: number | 'auto'
+  /** 제목 위아래 간격 (줄 단위). 원본 스타일 유지 모드에서는 줄 격자 맞춤이 켜져 있을 때만 적용한다. */
+  headingSpacing: number
   /** 첫 줄 들여쓰기 (글자 단위, em). */
   textIndentEm: number
   align: 'justify' | 'start'
@@ -95,7 +100,8 @@ export const DEFAULT_SETTINGS: Settings = {
     fontSizePt: 10.5,
     linesPerPage: 24,
     lineHeight: 1.7,
-    paragraphSpacing: 0,
+    paragraphSpacing: 'auto',
+    headingSpacing: 1,
     textIndentEm: 1,
     align: 'justify',
     wordBreak: 'normal',
@@ -114,12 +120,20 @@ export const LIMITS = {
   linesPerPage: { min: 1, max: 200 },
   lineHeight: { min: 0.8, max: 4 },
   paragraphSpacing: { min: 0, max: 5 },
+  headingSpacing: { min: 0, max: 5 },
   textIndentEm: { min: 0, max: 10 }
 } as const
 
 export interface PageSize {
   widthMm: number
   heightMm: number
+}
+
+/** 실제로 쓸 문단 간격 (줄 단위). */
+export function effectiveParagraphSpacing(settings: Settings): number {
+  const value = settings.text.paragraphSpacing
+  if (value !== 'auto') return value
+  return settings.layout.epubStyles === 'ignore' ? 1 : 0
 }
 
 /** 용지 규격과 방향을 반영한 실제 쪽 크기. */
@@ -142,6 +156,12 @@ function num(value: unknown, fallback: number, range: Range): number {
   const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN
   if (!Number.isFinite(n)) return fallback
   return Math.min(range.max, Math.max(range.min, n))
+}
+
+/** 숫자가 아니면(`'auto'` 포함) `'auto'`. */
+function numOrAuto(value: unknown, range: Range): number | 'auto' {
+  const n = num(value, NaN, range)
+  return Number.isNaN(n) ? 'auto' : n
 }
 
 function int(value: unknown, fallback: number, range: Range): number {
@@ -204,7 +224,8 @@ export function normalizeSettings(input: unknown): Settings {
       fontSizePt: num(text.fontSizePt, d.text.fontSizePt, LIMITS.fontSizePt),
       linesPerPage: int(text.linesPerPage, d.text.linesPerPage, LIMITS.linesPerPage),
       lineHeight: num(text.lineHeight, d.text.lineHeight, LIMITS.lineHeight),
-      paragraphSpacing: num(text.paragraphSpacing, d.text.paragraphSpacing, LIMITS.paragraphSpacing),
+      paragraphSpacing: numOrAuto(text.paragraphSpacing, LIMITS.paragraphSpacing),
+      headingSpacing: num(text.headingSpacing, d.text.headingSpacing, LIMITS.headingSpacing),
       textIndentEm: num(text.textIndentEm, d.text.textIndentEm, LIMITS.textIndentEm),
       align: oneOf(text.align, ['justify', 'start'], d.text.align),
       wordBreak: oneOf(text.wordBreak, ['normal', 'keep-all'], d.text.wordBreak),

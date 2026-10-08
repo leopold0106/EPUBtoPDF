@@ -7,7 +7,7 @@
  *  - `ignore` 모드: 원본 CSS는 HTML 조립 단계에서 제거되고, 여기서 만든 기본 스타일만 쓴다.
  */
 
-import type { Settings } from './settings'
+import { effectiveParagraphSpacing, type Settings } from './settings'
 import type { Typography } from './typography'
 import { cssNumber } from './units'
 
@@ -96,24 +96,27 @@ function pageRules(s: Settings, t: Typography, ctx: StylesheetContext): string[]
   return rules.filter(Boolean)
 }
 
-/** `ignore` 모드에서 원본 CSS 대신 쓰는 기본 스타일. */
+/** `ignore` 모드에서 원본 CSS 대신 쓰는 기본 스타일. 위아래 간격은 buildStylesheet가 정한다. */
 function baseRules(): string[] {
   return [
     `h1 { font-size: 1.6em; font-weight: bold; }`,
     `h2 { font-size: 1.35em; font-weight: bold; }`,
     `h3 { font-size: 1.15em; font-weight: bold; }`,
     `h4, h5, h6 { font-size: 1em; font-weight: bold; }`,
-    `${HEADINGS} { margin: 1em 0; text-indent: 0; text-align: start; }`,
-    `blockquote { margin: 0 0 0 2em; }`,
-    `ul, ol { margin: 0; padding-left: 2em; }`,
-    `table { border-collapse: collapse; margin: 0 auto; }`,
+    `${HEADINGS} { text-indent: 0; text-align: start; }`,
+    `blockquote { margin-left: 2em; margin-right: 0; }`,
+    `ul, ol { padding-left: 2em; }`,
+    `table { border-collapse: collapse; margin-left: auto; margin-right: auto; }`,
     `td, th { border: 1px solid #999; padding: 0 0.4em; }`,
-    `figure { margin: 0; text-align: center; }`,
+    `figure { margin-left: 0; margin-right: 0; text-align: center; }`,
     `figcaption { font-size: 0.9em; }`,
     `hr { border: none; border-top: 1px solid #999; }`,
     `a { color: inherit; text-decoration: none; }`
   ]
 }
+
+/** 원본 스타일 무시 모드에서 문단과 같은 간격을 두는 블록 요소. */
+const SPACED_BLOCKS = 'blockquote, ul, ol, dl, table, figure, pre'
 
 export function buildStylesheet(s: Settings, t: Typography, ctx: StylesheetContext = {}): string {
   const text = s.text
@@ -158,15 +161,22 @@ export function buildStylesheet(s: Settings, t: Typography, ctx: StylesheetConte
     `sub { top: 0.25em; }`
   )
 
-  // 제목: 줄 높이와 위아래 간격을 줄 피치의 정수 배로 맞춘다.
-  if (grid) {
+  // 제목 줄 높이: 줄 격자 맞춤이면 줄 피치의 정수 배로 올린다.
+  out.push(`${HEADINGS} { line-height: ${grid ? `round(up, 1.3em, ${px(line)})` : '1.3'}${imp}; }`)
+
+  // 제목 위아래 간격. 장 첫머리의 제목은 위 간격을 두지 않는다.
+  const headGap = headingGap(s, line)
+  if (headGap !== undefined) {
     out.push(
-      `${HEADINGS} { line-height: round(up, 1.3em, ${px(line)})${imp};` +
-        ` margin-top: ${px(line)}${imp}; margin-bottom: ${px(line)}${imp}; }`,
+      `${HEADINGS} { margin-top: ${px(headGap)}${imp}; margin-bottom: ${px(headGap)}${imp}; }`,
       `${HEADINGS}:first-child { margin-top: 0${imp}; }`
     )
-  } else {
-    out.push(`${HEADINGS} { line-height: 1.3${imp}; }`)
+  }
+
+  // 원본 스타일 무시 모드: 인용·목록·표·그림도 문단과 같은 간격으로 띄운다.
+  if (s.layout.epubStyles === 'ignore') {
+    const gap = px(paragraphGap(s, line))
+    out.push(`:is(${SPACED_BLOCKS}) { margin-top: ${gap}; margin-bottom: ${gap}; }`)
   }
 
   // 그림: 판면을 넘지 않게 줄이고 쪽 사이에서 잘리지 않게 한다.
@@ -183,8 +193,18 @@ export function buildStylesheet(s: Settings, t: Typography, ctx: StylesheetConte
   return out.join('\n') + '\n'
 }
 
-/** 문단 간격(px). 줄 격자 맞춤이 켜져 있으면 줄 피치의 정수 배로 반올림한다. */
+/** 줄 단위 간격을 px로. 줄 격자 맞춤이 켜져 있으면 정수 줄로 반올림한다. */
+function linesToPx(s: Settings, lines: number, linePx: number): number {
+  return (s.text.snapToGrid ? Math.round(lines) : lines) * linePx
+}
+
+/** 문단 간격(px). */
 export function paragraphGap(s: Settings, linePx: number): number {
-  const lines = s.text.snapToGrid ? Math.round(s.text.paragraphSpacing) : s.text.paragraphSpacing
-  return lines * linePx
+  return linesToPx(s, effectiveParagraphSpacing(s), linePx)
+}
+
+/** 제목 위아래 간격(px). 원본 스타일 유지 + 줄 격자 맞춤 꺼짐이면 원본을 따르므로 undefined. */
+export function headingGap(s: Settings, linePx: number): number | undefined {
+  if (s.layout.epubStyles === 'keep' && !s.text.snapToGrid) return undefined
+  return linesToPx(s, s.text.headingSpacing, linePx)
 }
