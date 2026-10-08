@@ -1,6 +1,17 @@
 import { join } from 'node:path'
-import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, protocol, shell } from 'electron'
 import { IpcChannels, type AppInfo } from '@shared/ipc'
+import { registerBookIpc } from './books'
+import { library } from './epub/library'
+import { EPUB_SCHEME, handleResourceRequest } from './epub/protocol'
+
+// 앱이 준비되기 전에 등록해야 한다. standard로 등록해야 문서 안의 상대 경로가 동작한다.
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: EPUB_SCHEME,
+    privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true }
+  }
+])
 
 function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -51,7 +62,9 @@ if (process.platform === 'win32') {
 }
 
 app.whenReady().then(() => {
+  protocol.handle(EPUB_SCHEME, (request) => handleResourceRequest(request.url, library.get))
   registerIpc()
+  registerBookIpc()
   createMainWindow()
 
   app.on('activate', () => {

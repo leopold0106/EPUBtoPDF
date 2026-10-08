@@ -115,3 +115,44 @@ button:disabled {
   background: var(--panel);
   border-top: 1px solid var(--border);
 }
+
+.preview:has(.book-info) {
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+.book-info {
+  padding: 16px 24px;
+}
+
+.book-info h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.book-info ol {
+  margin: 0;
+  padding-left: 1.5em;
+  line-height: 1.7;
+}
+
+.message {
+  margin: 16px 24px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.message--error {
+  color: #b91c1c;
+  background: color-mix(in srgb, #ef4444 10%, var(--panel));
+  border-color: color-mix(in srgb, #ef4444 40%, var(--border));
+}
+
+.message--warning {
+  margin: 0 0 16px;
+  padding-left: 28px;
+  color: #92400e;
+  background: color-mix(in srgb, #f59e0b 10%, var(--panel));
+  border-color: color-mix(in srgb, #f59e0b 40%, var(--border));
+}
