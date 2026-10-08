@@ -31,6 +31,17 @@ describe('JsonStore', () => {
     await Promise.all(Array.from({ length: 20 }, (_, i) => store.write({ i })))
     expect(JSON.parse(await readFile(store.file, 'utf8'))).toEqual({ i: 19 })
   })
+
+  it('쓰기와 지우기는 요청한 순서대로 실행된다', async () => {
+    const store = new JsonStore(join(dir, 'e.json'))
+    void store.write({ a: 1 })
+    void store.remove()
+    await store.write({ a: 2 })
+    expect(await store.read()).toEqual({ a: 2 })
+    void store.write({ a: 3 })
+    await store.remove()
+    expect(await store.read()).toBeUndefined()
+  })
 })
 
 describe('findEpubArg', () => {

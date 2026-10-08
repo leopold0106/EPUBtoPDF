@@ -8,7 +8,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promis
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { _electron, type ElectronApplication, type Page } from 'playwright-core'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import type { TextItem } from 'pdfjs-dist/types/src/display/api'
@@ -21,6 +21,8 @@ const shots = join(root, 'test-results/gui')
 let dir: string
 let app: ElectronApplication
 let win: Page
+/** 앱 창에서 생긴 오류·충돌·이동. 테스트가 실패하면 함께 출력한다. */
+const events: string[] = []
 
 const shot = (name: string): Promise<Buffer> => win.screenshot({ path: join(shots, `${name}.png`) })
 
@@ -35,7 +37,20 @@ beforeAll(async () => {
     args: [root, '--no-sandbox', `--user-data-dir=${join(dir, 'userdata')}`, epub]
   })
   win = await app.firstWindow()
+  const at = (): string => new Date().toISOString().slice(11, 23)
+  win.on('pageerror', (e) => events.push(`${at()} pageerror: ${e.stack ?? e.message}`))
+  win.on('console', (m) => m.type() === 'error' && events.push(`${at()} console.error: ${m.text()}`))
+  win.on('crash', () => events.push(`${at()} renderer crashed`))
+  win.on('framenavigated', (f) => f === win.mainFrame() && events.push(`${at()} navigated: ${f.url()}`))
+  app.on('console', (m) => m.type() === 'error' && events.push(`${at()} main console.error: ${m.text()}`))
   await win.setViewportSize({ width: 1400, height: 900 })
+})
+
+afterEach(async ({ task }) => {
+  if (task.result?.state !== 'fail') return
+  const body = await win.evaluate(() => document.body.innerText.slice(0, 300)).catch((e: unknown) => `(읽지 못함: ${String(e)})`)
+  // CI 로그에서 원인을 볼 수 있게 남긴다.
+  process.stdout.write(`\n[${task.name}] 실패 당시 앱 창\n  화면 글: ${JSON.stringify(body)}\n  기록:\n${events.map((e) => `    ${e}`).join('\n') || '    (없음)'}\n`)
 })
 
 afterAll(async () => {
