@@ -25,8 +25,14 @@ jobs:
       # 러너에 한글 글꼴이 없으면 한글이 빈 글리프로 인쇄되어 PDF 글자 검사가 실패한다.
       - name: 한글 글꼴 설치
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fonts-noto-cjk
-      # 빌드한 앱을 실행해 샘플 EPUB을 실제 PDF로 변환해 본다.
+      # 빌드한 앱을 실행해 샘플 EPUB을 실제 PDF로 변환하고, 화면을 조작해 본다.
       - run: xvfb-run -a npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gui-screenshots-linux
+          path: test-results/gui/
+          if-no-files-found: ignore
 
   windows:
     needs: check
@@ -38,8 +44,14 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      # Windows에서도 실제 변환이 되는지 확인한다.
+      # Windows에서도 실제 변환과 화면 조작이 되는지 확인한다. 화면 사진은 결과물로 올린다.
       - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gui-screenshots-windows
+          path: test-results/gui/
+          if-no-files-found: ignore
       - run: npm run build:win
         env:
           # 코드 서명 인증서가 없으므로 서명 단계를 건너뛴다.
