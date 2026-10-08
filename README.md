@@ -88,7 +88,14 @@ npm run build:win # Windows 설치 파일 (dist/)
 ```
 
 `main` 브랜치에 푸시하거나 PR을 열면 GitHub Actions가 Ubuntu와 Windows에서 테스트하고 설치 파일을 만들어 결과물로 올립니다.
-화면 테스트의 스크린샷도 `gui-screenshots-windows` 결과물로 올라갑니다. `v*` 태그를 푸시하면 Release에 설치 파일이 붙습니다.
+화면 테스트의 스크린샷도 `gui-screenshots-windows` 결과물로 올라갑니다.
+
+### 릴리즈
+
+1. `package.json`의 `version`을 올려 `main`에 반영합니다.
+2. GitHub **Actions → Build Windows → Run workflow**에서 `main`을 고르고 릴리즈 태그(예: `v0.2.0`)를 적어 실행합니다.
+   `v*` 태그를 직접 푸시해도 됩니다.
+3. 테스트를 모두 통과하면 그 태그로 Release가 만들어지고 설치 파일이 붙습니다. 태그가 `package.json` 버전과 다르면 멈춥니다.
 
 ### 구조
 
