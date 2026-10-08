@@ -30,6 +30,8 @@ export interface AssemblePayload {
    * 링크 주소는 `previewImageUrl(key)`. 최종 PDF에는 쓰지 않는다.
    */
   markImages?: boolean
+  /** 책갈피 표시를 둘 목차 항목. */
+  tocTargets?: TocTarget[]
   /** 인쇄 직전 다듬기 (render/typeset.ts). */
   typeset?: {
     /** 원본 스타일 유지 모드: 본문 글자 크기(px). */
@@ -38,6 +40,24 @@ export interface AssemblePayload {
     gridPx?: number
     gridPerChapter?: boolean
   }
+}
+
+/** 책갈피를 걸 목차 항목. 인쇄 후 이 표시가 놓인 쪽을 읽어 책갈피를 만든다. */
+export interface TocTarget {
+  /** 목차 항목 번호 (목차를 펼친 순서). */
+  n: number
+  /** `epub://` 주소와 조각 식별자. */
+  url: string
+}
+
+const TOC_MARKER_PREFIX = 'https://epubtopdf.invalid/toc/'
+
+export const tocMarkerUrl = (n: number): string => TOC_MARKER_PREFIX + n
+
+export function tocMarkerIndex(url: string | undefined): number | undefined {
+  if (!url?.startsWith(TOC_MARKER_PREFIX)) return undefined
+  const n = Number(url.slice(TOC_MARKER_PREFIX.length))
+  return Number.isInteger(n) ? n : undefined
 }
 
 const PREVIEW_IMAGE_PREFIX = 'https://epubtopdf.invalid/image/'

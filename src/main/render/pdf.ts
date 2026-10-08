@@ -10,6 +10,7 @@ import type { BookEdits } from '@shared/edits'
 import type { AssemblePayload, AssembleResult, ImageInfo, ListImagesPayload } from '@shared/render'
 import { RENDER_API_NAME, RENDER_PAGE_PATH } from '@shared/render'
 import type { Settings } from '@shared/settings'
+import { chapterTitles, flattenOutline, outlineFromToc } from '@shared/outline'
 import { buildStylesheet } from '@shared/stylesheet'
 import { computeTypography, type Typography } from '@shared/typography'
 import type { EpubBook } from '../epub/parse'
@@ -32,6 +33,7 @@ export interface RenderOptions {
 export interface RenderOutput {
   pdf: Uint8Array
   pageCount: number
+  bookmarkCount: number
   typography: Typography
   warnings: string[]
 }
@@ -70,11 +72,18 @@ export function listBookImages(book: EpubBook): Promise<ImageInfo[]> {
 async function renderNow(book: EpubBook, settings: Settings, options: RenderOptions): Promise<RenderOutput> {
   const typography = computeTypography(settings)
   const indexes = options.chapters ?? book.spine.map((s) => s.index)
+  // 책갈피는 책 전체를 변환할 때만 만든다.
+  const outline = settings.output.bookmarks && !options.chapters && !options.markImages ? outlineFromToc(book.toc, book.spine) : undefined
   const payload: AssemblePayload = {
     chapters: indexes.map((index) => ({ index, url: resourceUrl(book.id, book.spine[index]!.path) })),
     spineUrls: book.spine.map((s) => resourceUrl(book.id, s.path)),
     keepEpubStyles: settings.layout.epubStyles === 'keep',
-    userCss: buildStylesheet(settings, typography, { bookTitle: book.metadata.title, fontFaces: await fontRegistry().faces() }),
+    userCss: buildStylesheet(settings, typography, {
+      bookTitle: book.metadata.title,
+      chapterTitles: chapterTitles(book.spine),
+      fontFaces: await fontRegistry().faces()
+    }),
+    tocTargets: outline && flattenOutline(outline).map((node) => ({ n: node.n, url: resourceUrl(book.id, node.href.split('#')[0]!) + (node.href.includes('#') ? `#${encodeURIComponent(node.href.slice(node.href.indexOf('#') + 1))}` : '') })),
     lang: book.metadata.language,
     dir: book.direction === 'default' ? undefined : book.direction,
     hiddenImages: options.edits?.hiddenImages,
@@ -103,8 +112,8 @@ async function renderNow(book: EpubBook, settings: Settings, options: RenderOpti
     })
 
     options.onStage?.('finishing')
-    const { pdf, pageCount } = await finalizePdf(new Uint8Array(raw), book.metadata)
-    return { pdf, pageCount, typography, warnings: assembled.warnings }
+    const { pdf, pageCount, bookmarkCount } = await finalizePdf(new Uint8Array(raw), book.metadata, outline)
+    return { pdf, pageCount, bookmarkCount, typography, warnings: assembled.warnings }
   } finally {
     win.destroy()
   }

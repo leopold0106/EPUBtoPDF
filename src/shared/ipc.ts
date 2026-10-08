@@ -59,6 +59,7 @@ export interface PreviewResult {
 export interface ConvertResult {
   path: string
   pageCount: number
+  bookmarkCount: number
   warnings: string[]
   seconds: number
 }

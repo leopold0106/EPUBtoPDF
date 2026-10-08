@@ -31,6 +31,7 @@ export async function convertBook(
   return {
     path: outputPath,
     pageCount: output.pageCount,
+    bookmarkCount: output.bookmarkCount,
     warnings: output.warnings,
     seconds: (Date.now() - started) / 1000
   }

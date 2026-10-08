@@ -11,14 +11,14 @@
  */
 
 import { imageKey } from '@shared/edits'
-import { previewImageUrl, type AssemblePayload, type AssembleResult, type ImageInfo, type ListImagesPayload } from '@shared/render'
-import { CHAPTER_CLASS } from '@shared/stylesheet'
+import { previewImageUrl, tocMarkerUrl, type AssemblePayload, type AssembleResult, type ImageInfo, type ListImagesPayload } from '@shared/render'
+import { chapterAnchorId, CHAPTER_CLASS } from '@shared/stylesheet'
 
 const XHTML_NS = 'http://www.w3.org/1999/xhtml'
 const SVG_NS = 'http://www.w3.org/2000/svg'
 const XLINK_NS = 'http://www.w3.org/1999/xlink'
 
-export const chapterAnchorId = (index: number): string => `epubtopdf-c${index}`
+export { chapterAnchorId }
 export const USER_STYLE_ID = 'epubtopdf-user-style'
 /** 조립한 문서에서 그림 요소에 붙이는 속성. 값은 `imageKey`. */
 export const IMAGE_KEY_ATTR = 'data-epubtopdf-image'
@@ -347,6 +347,7 @@ export function assembleBook(
   }
 
   if (payload.markImages) markImages(doc)
+  if (payload.tocTargets?.length) markTocTargets(doc, payload, book)
 
   // `body.chapter p` 같은 원본 규칙이 맞도록 장들의 body 클래스를 문서 body에도 붙인다.
   if (keep) for (const cls of bodyClasses) doc.body.classList.add(cls)
@@ -375,8 +376,7 @@ function isEmptyChapter(section: Element): boolean {
  * SVG 안의 그림은 앵커가 되지 않으므로 SVG `<a>`로 감싼다.
  */
 function markImages(doc: Document): void {
-  const layer = doc.createElement('div')
-  layer.className = 'epubtopdf-image-links'
+  const layer = markerLayer(doc, 'epubtopdf-image-links')
   let n = 0
   for (const el of doc.body.querySelectorAll(`[${IMAGE_KEY_ATTR}]`)) {
     const key = el.getAttribute(IMAGE_KEY_ATTR)!
@@ -389,13 +389,56 @@ function markImages(doc: Document): void {
       continue
     }
     const anchor = `--epubtopdf-img-${n++}`
-    ;(el as HTMLElement).style.setProperty('anchor-name', anchor)
+    addAnchorName(el as HTMLElement, anchor)
     const link = doc.createElement('a')
     link.href = url
     link.setAttribute(
       'style',
       `position: absolute; position-anchor: ${anchor}; top: anchor(top); left: anchor(left); right: anchor(right); bottom: anchor(bottom);`
     )
+    layer.appendChild(link)
+  }
+  if (layer.childElementCount > 0) doc.body.appendChild(layer)
+}
+
+/**
+ * 표시 링크를 담을 상자. 상자를 만들지 않게(display: contents) 해야 쪽 나눔에 끼어들지 않고,
+ * 안의 링크가 문서 전체를 기준으로 앵커 위치를 잡는다
+ * (장 제목 머리글의 이름 붙은 쪽이 바뀌면서 빈 쪽이 생기는 것을 막는다).
+ */
+function markerLayer(doc: Document, className: string): HTMLElement {
+  const layer = doc.createElement('div')
+  layer.className = className
+  layer.setAttribute('style', 'display: contents;')
+  return layer
+}
+
+/** 요소에 CSS 앵커 이름을 더한다 (이미 있으면 목록으로). */
+function addAnchorName(el: HTMLElement, name: string): void {
+  const current = el.style.getPropertyValue('anchor-name')
+  el.style.setProperty('anchor-name', current && current !== 'none' ? `${current}, ${name}` : name)
+}
+
+/**
+ * 목차 항목이 가리키는 곳 맨 위에 1px짜리 링크를 둔다. 인쇄한 뒤 이 링크가 놓인 쪽과 높이를 읽어
+ * 책갈피를 만들고, 링크는 지운다 (render/postprocess.ts).
+ */
+function markTocTargets(doc: Document, payload: AssemblePayload, book: BookContext): void {
+  const layer = markerLayer(doc, 'epubtopdf-toc-links')
+  for (const target of payload.tocTargets ?? []) {
+    const url = tryUrl(target.url, 'epub://invalid/')
+    const index = url && book.spineIndex.get(documentKey(url))
+    const chapter = index === undefined ? undefined : book.rendered.get(index)
+    if (!url || !chapter) continue
+    const fragment = decodeFragment(url.hash)
+    const el =
+      (fragment ? doc.getElementById(chapter.ids.get(fragment) ?? fragment) : null) ?? doc.getElementById(chapterAnchorId(chapter.index))
+    if (!(el instanceof HTMLElement)) continue
+    const anchor = `--epubtopdf-toc-${target.n}`
+    addAnchorName(el, anchor)
+    const link = doc.createElement('a')
+    link.href = tocMarkerUrl(target.n)
+    link.setAttribute('style', `position: absolute; position-anchor: ${anchor}; top: anchor(top); left: anchor(left); width: 1px; height: 1px;`)
     layer.appendChild(link)
   }
   if (layer.childElementCount > 0) doc.body.appendChild(layer)

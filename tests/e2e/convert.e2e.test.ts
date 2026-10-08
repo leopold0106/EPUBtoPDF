@@ -148,6 +148,32 @@ describe('명령줄 변환', () => {
     expect(offGrid).toEqual([])
   })
 
+  it('목차가 PDF 책갈피가 되고, 장 제목이 머리글에 들어간다', async () => {
+    const pdf = await convert('outline', { decor: { header: 'chapterTitle' } })
+    const texts = await allText(pdf)
+    const outline = await pdf.getOutline()
+    const flat: { title: string; page: number }[] = []
+    const walk = async (items: typeof outline): Promise<void> => {
+      for (const item of items ?? []) {
+        flat.push({ title: item.title, page: (await pdf.getPageIndex((item.dest as [never])[0])) + 1 })
+        await walk(item.items)
+      }
+    }
+    await walk(outline)
+    expect(flat.map((f) => f.title)).toEqual(['제1장 강가의 아침', '다리 위에서', '제2장 시장 골목', '등불', '장부', '제3장 등대', '주석'])
+    // 책갈피가 가리키는 쪽에 그 제목이 있다.
+    for (const f of flat) expect(texts[f.page - 1]).toContain(squash(f.title))
+    // 장 제목 머리글: 2장의 둘째 쪽 맨 위에 '제2장 시장 골목'
+    const ch2 = flat.find((f) => f.title === '제2장 시장 골목')!.page
+    const pageTop = (await pdf.getPage(ch2 + 1)).view[3]!
+    const header = (await pageText(pdf, ch2 + 1)).filter((i) => (i.transform[5] as number) > pageTop - 20 * MM)
+    expect(squash(header.map((i) => i.str).join(''))).toBe(squash('제2장 시장 골목'))
+    // 표시용 링크는 남지 않는다.
+    for (let n = 1; n <= pdf.numPages; n++) {
+      for (const a of await (await pdf.getPage(n)).getAnnotations()) expect(String(a.url ?? '')).not.toContain('epubtopdf.invalid')
+    }
+  })
+
   it('원본 스타일 무시, B6 가로 방향', async () => {
     const pdf = await convert('ignore-b6', {
       page: { paper: 'B6', orientation: 'landscape' },

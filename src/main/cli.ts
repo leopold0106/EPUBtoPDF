@@ -44,7 +44,8 @@ export async function runCli(args: CliArgs): Promise<number> {
   try {
     const result = await convertBook(book, settings, args.output, { edits: normalizeEdits(rawEdits.value) })
     for (const w of result.warnings) console.warn(`경고: ${w}`)
-    console.log(`${result.path} (${result.pageCount}쪽, ${result.seconds.toFixed(1)}초)`)
+    const bookmarks = result.bookmarkCount > 0 ? `, 책갈피 ${result.bookmarkCount}개` : ''
+    console.log(`${result.path} (${result.pageCount}쪽${bookmarks}, ${result.seconds.toFixed(1)}초)`)
     return 0
   } catch (err) {
     console.error(`변환 실패: ${err instanceof Error ? err.message : err}`)

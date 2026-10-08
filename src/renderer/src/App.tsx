@@ -310,7 +310,8 @@ export default function App(): React.JSX.Element {
           {converted && (
             <div className="message message--success">
               <p>
-                변환을 마쳤습니다. {converted.pageCount}쪽 · {converted.seconds.toFixed(1)}초
+                변환을 마쳤습니다. {converted.pageCount}쪽
+                {converted.bookmarkCount > 0 && ` · 책갈피 ${converted.bookmarkCount}개`} · {converted.seconds.toFixed(1)}초
                 <br />
                 <span className="path">{converted.path}</span>
               </p>

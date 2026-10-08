@@ -14,6 +14,9 @@ import { cssNumber } from './units'
 /** 각 장을 감싸는 요소의 클래스. HTML 조립 단계와 공유한다. */
 export const CHAPTER_CLASS = 'epubtopdf-chapter'
 
+/** 장(section)의 id. 다른 장으로 가는 링크와 장별 머리글이 이 id를 쓴다. */
+export const chapterAnchorId = (spineIndex: number): string => `epubtopdf-c${spineIndex}`
+
 /**
  * 본문 문단에 붙는 클래스. 렌더링 창이 원본에서 가장 많이 쓰인 문단 모양을 찾아 붙인다.
  * 들여쓰기·정렬·글꼴 설정은 이 문단에만 적용해, 원본의 특수 문단은 원래 모양을 지킨다.
@@ -31,6 +34,8 @@ export interface FontFaceSource {
 export interface StylesheetContext {
   /** 머리글에 쓸 책 제목. */
   bookTitle?: string
+  /** 장 제목 머리글: 장(spine 위치)마다 머리글에 쓸 제목. */
+  chapterTitles?: Record<number, string>
   /** 사용자가 추가한 글꼴 파일. */
   fontFaces?: FontFaceSource[]
 }
@@ -82,6 +87,16 @@ function pageRules(s: Settings, t: Typography, ctx: StylesheetContext): string[]
     pn === 'bottom-center' ? `  ${numberBox('bottom-center')}` : '',
     `}`
   )
+
+  // 장 제목 머리글: 장마다 이름 붙은 쪽(named page)을 쓰고 그 쪽의 머리글에 제목을 넣는다.
+  // 이름이 바뀌는 곳에서는 항상 새 쪽이 시작된다.
+  if (s.decor.header === 'chapterTitle') {
+    for (const [index, title] of Object.entries(ctx.chapterTitles ?? {})) {
+      const name = `epubtopdf-p${index}`
+      rules.push(`#${chapterAnchorId(Number(index))} { page: ${name}; }`)
+      rules.push(`@page ${name} { @top-center { content: ${cssString(title)}; ${decorFont} } }`)
+    }
+  }
 
   if (s.margins.mirrored) {
     // 펼침면의 왼쪽(짝수) 쪽은 제본이 오른쪽에 온다.
