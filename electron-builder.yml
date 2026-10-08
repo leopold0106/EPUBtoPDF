@@ -1,0 +1,32 @@
+appId: com.leopold0106.epubtopdf
+productName: EPUBtoPDF
+directories:
+  output: dist
+  buildResources: build
+files:
+  - out/**
+  - package.json
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: EPUBtoPDF
+  installerLanguages: [ko_KR, en_US]
+  language: '1042'
+  artifactName: ${productName}-Setup-${version}.${ext}
+portable:
+  artifactName: ${productName}-Portable-${version}.${ext}
+fileAssociations:
+  - ext: epub
+    name: EPUB
+    description: EPUB 전자책
+    role: Viewer
+publish: null

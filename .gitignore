@@ -5,7 +5,6 @@ __pycache__/
 venv/
 *.egg-info/
 dist/
-build/
 
 # Node
 node_modules/
@@ -18,3 +17,10 @@ Thumbs.db
 
 # Outputs
 *.pdf
+
+# Electron build output
+out/
+dist/
+*.tsbuildinfo
+samples/
+test-results/
