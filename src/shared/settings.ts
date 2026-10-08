@@ -70,8 +70,8 @@ export type PageNumberPosition = 'none' | 'bottom-center' | 'bottom-outside' | '
 
 export interface DecorSettings {
   pageNumbers: PageNumberPosition
-  /** 쪽 위 가운데에 표시할 머리글. */
-  header: 'none' | 'bookTitle'
+  /** 쪽 위 가운데에 표시할 머리글. 장 제목은 목차에서 가져온다. */
+  header: 'none' | 'bookTitle' | 'chapterTitle'
 }
 
 export interface OutputSettings {
@@ -241,7 +241,7 @@ export function normalizeSettings(input: unknown): Settings {
         ['none', 'bottom-center', 'bottom-outside', 'top-outside'],
         d.decor.pageNumbers
       ),
-      header: oneOf(decor.header, ['none', 'bookTitle'], d.decor.header)
+      header: oneOf(decor.header, ['none', 'bookTitle', 'chapterTitle'], d.decor.header)
     },
     output: {
       bookmarks: bool(output.bookmarks, d.output.bookmarks)

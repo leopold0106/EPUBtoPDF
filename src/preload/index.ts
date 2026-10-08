@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { IpcChannels, type ConvertProgress, type RendererApi } from '@shared/ipc'
 
 const api: RendererApi = {
@@ -14,7 +14,16 @@ const api: RendererApi = {
     return () => ipcRenderer.removeListener(IpcChannels.convertProgress, handler)
   },
   openOutput: (path) => ipcRenderer.invoke(IpcChannels.openOutput, path),
-  showOutput: (path) => ipcRenderer.invoke(IpcChannels.showOutput, path)
+  showOutput: (path) => ipcRenderer.invoke(IpcChannels.showOutput, path),
+  loadSettings: () => ipcRenderer.invoke(IpcChannels.loadSettings),
+  saveSettings: (settings) => ipcRenderer.invoke(IpcChannels.saveSettings, settings),
+  takeLaunchFile: () => ipcRenderer.invoke(IpcChannels.takeLaunchFile),
+  onOpenRequest: (listener) => {
+    const handler = (_event: Electron.IpcRendererEvent, path: string): void => listener(path)
+    ipcRenderer.on(IpcChannels.openRequest, handler)
+    return () => ipcRenderer.removeListener(IpcChannels.openRequest, handler)
+  },
+  pathForFile: (file) => webUtils.getPathForFile(file)
 }
 
 contextBridge.exposeInMainWorld('api', api)

@@ -14,7 +14,11 @@ export const IpcChannels = {
   convert: 'convert:run',
   convertProgress: 'convert:progress',
   openOutput: 'output:open',
-  showOutput: 'output:show'
+  showOutput: 'output:show',
+  loadSettings: 'settings:load',
+  saveSettings: 'settings:save',
+  takeLaunchFile: 'app:take-launch-file',
+  openRequest: 'book:open-request'
 } as const
 
 export interface AppInfo {
@@ -55,4 +59,13 @@ export interface RendererApi {
   onConvertProgress(listener: (progress: ConvertProgress) => void): () => void
   openOutput(path: string): Promise<void>
   showOutput(path: string): Promise<void>
+  /** 저장해 둔 마지막 설정. 처음 실행이면 기본값. */
+  loadSettings(): Promise<Settings>
+  saveSettings(settings: Settings): Promise<void>
+  /** 실행할 때 함께 넘어온 EPUB 경로 (한 번만 돌려준다). */
+  takeLaunchFile(): Promise<string | null>
+  /** 앱이 이미 켜져 있을 때 다른 EPUB을 더블클릭하면 불린다. */
+  onOpenRequest(listener: (path: string) => void): () => void
+  /** 끌어다 놓은 파일의 경로. */
+  pathForFile(file: File): string
 }

@@ -7,6 +7,8 @@ import { parseCliArgs } from './cli-args'
 import { registerConvertIpc } from './convert'
 import { library } from './epub/library'
 import { EPUB_SCHEME, handleResourceRequest } from './epub/protocol'
+import { findEpubArg } from './launch'
+import { registerSettingsIpc } from './settings'
 
 // 앱이 준비되기 전에 등록해야 한다. standard로 등록해야 문서 안의 상대 경로가 동작한다.
 protocol.registerSchemesAsPrivileged([
@@ -15,6 +17,8 @@ protocol.registerSchemesAsPrivileged([
     privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true }
   }
 ])
+
+let mainWindow: BrowserWindow | undefined
 
 function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -34,6 +38,10 @@ function createMainWindow(): BrowserWindow {
   })
 
   win.once('ready-to-show', () => win.show())
+  win.on('closed', () => {
+    if (mainWindow === win) mainWindow = undefined
+  })
+  mainWindow = win
 
   // 렌더러에서 연 외부 링크는 앱 안이 아니라 기본 브라우저로 연다.
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -49,6 +57,9 @@ function createMainWindow(): BrowserWindow {
   return win
 }
 
+/** 실행할 때 넘어온 EPUB. 렌더러가 준비되면 한 번 가져간다. */
+let launchFile: string | undefined
+
 function registerIpc(): void {
   ipcMain.handle(IpcChannels.getAppInfo, (): AppInfo => ({
     name: app.getName(),
@@ -57,6 +68,11 @@ function registerIpc(): void {
     chrome: process.versions.chrome,
     platform: process.platform
   }))
+  ipcMain.handle(IpcChannels.takeLaunchFile, () => {
+    const file = launchFile ?? null
+    launchFile = undefined
+    return file
+  })
 }
 
 if (process.platform === 'win32') {
@@ -66,7 +82,21 @@ if (process.platform === 'win32') {
 
 const cli = parseCliArgs(process.argv)
 
+// 창은 하나만 띄운다. 이미 켜져 있으면 그 창에서 새 파일을 연다 (명령줄 변환은 예외).
+const primary = cli !== undefined || app.requestSingleInstanceLock()
+if (!primary) app.quit()
+
+app.on('second-instance', (_event, argv, cwd) => {
+  const win = mainWindow
+  if (!win) return
+  if (win.isMinimized()) win.restore()
+  win.focus()
+  const file = findEpubArg(argv, cwd)
+  if (file) win.webContents.send(IpcChannels.openRequest, file)
+})
+
 app.whenReady().then(async () => {
+  if (!primary) return
   protocol.handle(EPUB_SCHEME, (request) => handleResourceRequest(request.url, library.get))
 
   if (cli) {
@@ -79,13 +109,15 @@ app.whenReady().then(async () => {
     return
   }
 
+  launchFile = findEpubArg(process.argv)
   registerIpc()
   registerBookIpc()
   registerConvertIpc()
+  registerSettingsIpc()
   createMainWindow()
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createMainWindow()
+    if (!mainWindow) createMainWindow()
   })
 })
 
