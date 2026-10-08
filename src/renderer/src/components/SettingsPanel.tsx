@@ -128,10 +128,11 @@ export function SettingsPanel({ settings: s, typography: t, issues, onChange, on
           onChange={(sizing) => onChange({ text: sizing === 'linesPerPage' ? { sizing, linesPerPage: Math.max(1, t.linesPerPage) } : { sizing, fontSizePt: Math.round(t.fontSizePt * 2) / 2 } })}
         />
         <div className="field-row">
+          {/* 방식을 바꾸면 칸을 새로 만든다. 같은 칸을 이어 쓰면 잠깐 이전 값이 남아, 그 사이 입력이 덮어써질 수 있다. */}
           {linesMode ? (
-            <NumberField label="쪽당 줄 수" unit="줄" value={s.text.linesPerPage} min={LIMITS.linesPerPage.min} max={LIMITS.linesPerPage.max} step={1} decimals={0} invalid={invalid('text.linesPerPage')} onChange={(v) => onChange({ text: { linesPerPage: Math.round(v) } })} />
+            <NumberField key="linesPerPage" label="쪽당 줄 수" unit="줄" value={s.text.linesPerPage} min={LIMITS.linesPerPage.min} max={LIMITS.linesPerPage.max} step={1} decimals={0} invalid={invalid('text.linesPerPage')} onChange={(v) => onChange({ text: { linesPerPage: Math.round(v) } })} />
           ) : (
-            <NumberField label="글자 크기" unit="pt" value={s.text.fontSizePt} min={LIMITS.fontSizePt.min} max={LIMITS.fontSizePt.max} step={0.5} invalid={invalid('text.fontSizePt')} onChange={(v) => onChange({ text: { fontSizePt: v } })} />
+            <NumberField key="fontSizePt" label="글자 크기" unit="pt" value={s.text.fontSizePt} min={LIMITS.fontSizePt.min} max={LIMITS.fontSizePt.max} step={0.5} invalid={invalid('text.fontSizePt')} onChange={(v) => onChange({ text: { fontSizePt: v } })} />
           )}
           <NumberField label="줄 간격" unit="배" value={s.text.lineHeight} min={LIMITS.lineHeight.min} max={LIMITS.lineHeight.max} step={0.05} onChange={(v) => onChange({ text: { lineHeight: v } })} />
         </div>

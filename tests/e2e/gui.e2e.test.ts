@@ -84,7 +84,25 @@ describe('앱 화면', () => {
     await lines.fill('22')
     await lines.press('Enter')
     await win.evaluate(() => document.querySelector('[data-page="2"]')?.scrollIntoView())
-    await win.getByText('쪽당 최대 22줄').waitFor({ timeout: 30000 })
+    try {
+      await win.getByText('쪽당 최대 22줄').waitFor({ timeout: 30000 })
+    } catch (err) {
+      // 가끔 CI에서만 실패한다. 원인을 알 수 있게 그때의 화면 상태를 남긴다.
+      await shot('3-lines-per-page-failed')
+      const state = await win.evaluate(() => ({
+        status: document.querySelector('.preview-bar__status')?.textContent,
+        statusWidth: document.querySelector('.preview-bar__status')?.getBoundingClientRect().width,
+        summary: document.querySelector('.typo-summary')?.textContent,
+        linesInput: [...document.querySelectorAll('.field')]
+          .find((f) => f.querySelector('label')?.textContent === '쪽당 줄 수')
+          ?.querySelector('input')?.value,
+        pages: document.querySelectorAll('.page').length,
+        drawnPages: [...document.querySelectorAll('.page')].filter((p) => p.querySelector('canvas')?.width).map((p) => p.getAttribute('data-page')),
+        scrollTop: document.querySelector('.pages')?.scrollTop,
+        errors: [...document.querySelectorAll('.message--error')].map((e) => e.textContent)
+      }))
+      throw new Error(`${(err as Error).message}\n화면 상태: ${JSON.stringify(state)}`)
+    }
     await shot('3-lines-per-page')
   })
 
