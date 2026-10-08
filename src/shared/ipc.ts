@@ -11,6 +11,7 @@ export const IpcChannels = {
   openBookPath: 'book:open-path',
   closeBook: 'book:close',
   listImages: 'book:list-images',
+  preview: 'preview:render',
   convert: 'convert:run',
   convertProgress: 'convert:progress',
   openOutput: 'output:open',
@@ -37,6 +38,20 @@ export interface ConvertProgress {
   stage: 'assembling' | 'printing' | 'finishing'
 }
 
+export interface PreviewRequest {
+  /** 미리 볼 장(spine 위치). 생략하면 책 전체. */
+  chapters?: number[]
+  /** 쪽수만 필요할 때 (PDF는 돌려주지 않는다). */
+  countOnly?: boolean
+}
+
+export interface PreviewResult {
+  pdf?: Uint8Array
+  pageCount: number
+  warnings: string[]
+  ms: number
+}
+
 export interface ConvertResult {
   path: string
   pageCount: number
@@ -53,6 +68,8 @@ export interface RendererApi {
   closeBook(bookId: string): Promise<void>
   /** 책에 든 그림 목록. */
   listImages(bookId: string): Promise<Result<ImageInfo[]>>
+  /** 미리보기 PDF를 만든다. */
+  preview(bookId: string, settings: Settings, edits: BookEdits, request: PreviewRequest): Promise<Result<PreviewResult>>
   /** 저장 위치를 물은 뒤 PDF로 변환한다. 저장을 취소하면 null. */
   convert(bookId: string, settings: Settings, edits: BookEdits): Promise<Result<ConvertResult> | null>
   /** 변환 진행 상황을 받는다. 돌려받은 함수를 부르면 구독을 끊는다. */

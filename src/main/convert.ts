@@ -3,7 +3,7 @@
 import { writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
-import { IpcChannels, type ConvertProgress, type ConvertResult, type Result } from '@shared/ipc'
+import { IpcChannels, type ConvertProgress, type ConvertResult, type PreviewRequest, type PreviewResult, type Result } from '@shared/ipc'
 import type { ImageInfo } from '@shared/render'
 import { normalizeEdits, type BookEdits } from '@shared/edits'
 import { safeFileName } from '@shared/filename'
@@ -50,6 +50,41 @@ export function registerConvertIpc(): void {
       return { ok: false, error: `그림 목록을 만들지 못했습니다: ${err instanceof Error ? err.message : String(err)}` }
     }
   })
+
+  ipcMain.handle(
+    IpcChannels.preview,
+    async (_event, bookId: unknown, rawSettings: unknown, rawEdits: unknown, rawRequest: unknown): Promise<Result<PreviewResult>> => {
+      const book = typeof bookId === 'string' ? library.get(bookId) : undefined
+      if (!book) return { ok: false, error: '열린 책이 없습니다.' }
+      const settings = normalizeSettings(rawSettings)
+      const errors = settingsErrors(settings)
+      if (errors.length > 0) return { ok: false, error: errors.join('\n') }
+      const request = (rawRequest ?? {}) as PreviewRequest
+      const chapters = Array.isArray(request.chapters)
+        ? request.chapters.filter((i) => Number.isInteger(i) && i >= 0 && i < book.spine.length)
+        : undefined
+      const started = Date.now()
+      try {
+        const output = await renderPdf(book, settings, {
+          chapters: chapters?.length ? chapters : undefined,
+          edits: normalizeEdits(rawEdits),
+          markImages: !request.countOnly
+        })
+        return {
+          ok: true,
+          value: {
+            pdf: request.countOnly ? undefined : output.pdf,
+            pageCount: output.pageCount,
+            warnings: output.warnings,
+            ms: Date.now() - started
+          }
+        }
+      } catch (err) {
+        console.error(err)
+        return { ok: false, error: `미리보기를 만들지 못했습니다: ${err instanceof Error ? err.message : String(err)}` }
+      }
+    }
+  )
 
   ipcMain.handle(IpcChannels.convert, async (event, bookId: unknown, rawSettings: unknown, rawEdits: unknown): Promise<Result<ConvertResult> | null> => {
     const book = typeof bookId === 'string' ? library.get(bookId) : undefined

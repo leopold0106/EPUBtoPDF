@@ -11,7 +11,7 @@
  */
 
 import { imageKey } from '@shared/edits'
-import type { AssemblePayload, AssembleResult, ImageInfo, ListImagesPayload } from '@shared/render'
+import { previewImageUrl, type AssemblePayload, type AssembleResult, type ImageInfo, type ListImagesPayload } from '@shared/render'
 import { CHAPTER_CLASS } from '@shared/stylesheet'
 
 const XHTML_NS = 'http://www.w3.org/1999/xhtml'
@@ -346,6 +346,8 @@ export function assembleBook(
     doc.body.appendChild(section)
   }
 
+  if (payload.markImages) markImages(doc)
+
   // `body.chapter p` 같은 원본 규칙이 맞도록 장들의 body 클래스를 문서 body에도 붙인다.
   if (keep) for (const cls of bodyClasses) doc.body.classList.add(cls)
 
@@ -365,6 +367,38 @@ function isEmptyChapter(section: Element): boolean {
     (section.textContent ?? '').trim() === '' &&
     !section.querySelector('img, svg, video, audio, object, embed, iframe, canvas, table, hr')
   )
+}
+
+/**
+ * 미리보기용 그림 표시. 문서 구조(`div > img` 같은 원본 선택자)를 바꾸지 않도록,
+ * HTML 그림은 CSS 앵커 위치로 그림 위에 겹치는 링크를 문서 끝에 따로 둔다.
+ * SVG 안의 그림은 앵커가 되지 않으므로 SVG `<a>`로 감싼다.
+ */
+function markImages(doc: Document): void {
+  const layer = doc.createElement('div')
+  layer.className = 'epubtopdf-image-links'
+  let n = 0
+  for (const el of doc.body.querySelectorAll(`[${IMAGE_KEY_ATTR}]`)) {
+    const key = el.getAttribute(IMAGE_KEY_ATTR)!
+    const url = previewImageUrl(key)
+    if (el.namespaceURI === SVG_NS) {
+      const a = doc.createElementNS(SVG_NS, 'a')
+      a.setAttribute('href', url)
+      el.replaceWith(a)
+      a.appendChild(el)
+      continue
+    }
+    const anchor = `--epubtopdf-img-${n++}`
+    ;(el as HTMLElement).style.setProperty('anchor-name', anchor)
+    const link = doc.createElement('a')
+    link.href = url
+    link.setAttribute(
+      'style',
+      `position: absolute; position-anchor: ${anchor}; top: anchor(top); left: anchor(left); right: anchor(right); bottom: anchor(bottom);`
+    )
+    layer.appendChild(link)
+  }
+  if (layer.childElementCount > 0) doc.body.appendChild(layer)
 }
 
 /** 장 문서들에 든 그림 목록. 번호는 assembleBook이 매기는 것과 같다. */

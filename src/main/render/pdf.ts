@@ -23,6 +23,8 @@ export interface RenderOptions {
   /** 렌더링할 장(spine 위치). 생략하면 전체. */
   chapters?: number[]
   edits?: BookEdits
+  /** 미리보기: 그림 위치를 알 수 있게 링크를 겹친다. */
+  markImages?: boolean
   onStage?: (stage: RenderStage) => void
 }
 
@@ -74,7 +76,8 @@ async function renderNow(book: EpubBook, settings: Settings, options: RenderOpti
     userCss: buildStylesheet(settings, typography, { bookTitle: book.metadata.title }),
     lang: book.metadata.language,
     dir: book.direction === 'default' ? undefined : book.direction,
-    hiddenImages: options.edits?.hiddenImages
+    hiddenImages: options.edits?.hiddenImages,
+    markImages: options.markImages
   }
 
   const win = createRenderWindow(typography.bodyWidthPx)

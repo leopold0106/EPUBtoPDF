@@ -25,6 +25,25 @@ export interface AssemblePayload {
   dir?: 'ltr' | 'rtl'
   /** 뺄 그림 (`imageKey`). */
   hiddenImages?: string[]
+  /**
+   * 미리보기용: 그림마다 PDF 링크를 겹쳐 두어, 미리보기에서 누른 그림이 어느 그림인지 알 수 있게 한다.
+   * 링크 주소는 `previewImageUrl(key)`. 최종 PDF에는 쓰지 않는다.
+   */
+  markImages?: boolean
+}
+
+const PREVIEW_IMAGE_PREFIX = 'https://epubtopdf.invalid/image/'
+
+export const previewImageUrl = (key: string): string => PREVIEW_IMAGE_PREFIX + encodeURIComponent(key)
+
+/** 미리보기 PDF의 링크 주소에서 그림 키를 꺼낸다. 그림 링크가 아니면 undefined. */
+export function imageKeyFromUrl(url: string | undefined): string | undefined {
+  if (!url?.startsWith(PREVIEW_IMAGE_PREFIX)) return undefined
+  try {
+    return decodeURIComponent(url.slice(PREVIEW_IMAGE_PREFIX.length))
+  } catch {
+    return undefined
+  }
 }
 
 /** 그림 목록을 만들 때 넘기는 값. */

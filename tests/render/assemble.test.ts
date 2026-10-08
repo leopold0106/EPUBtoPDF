@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest'
-import type { AssemblePayload } from '@shared/render'
+import { imageKeyFromUrl, previewImageUrl, type AssemblePayload } from '@shared/render'
 import { CHAPTER_CLASS } from '@shared/stylesheet'
 import { assembleBook, IMAGE_KEY_ATTR, listImages, parseChapter, rewriteCssUrls, USER_STYLE_ID } from '../../src/render/assemble'
 
@@ -262,5 +262,40 @@ describe('그림 빼기', () => {
     assemble(payload(['c1.xhtml'], { hiddenImages: ['0:0'] }), [two])
     expect(doc.querySelectorAll('figure img')).toHaveLength(1)
     expect(doc.querySelector('figcaption')).not.toBeNull()
+  })
+})
+
+describe('미리보기 그림 표시', () => {
+  it('HTML 그림은 문서 구조를 그대로 두고, 문서 끝에 앵커로 겹치는 링크를 둔다', () => {
+    const page = xhtml('<div class="pic"><img src="a.png"/></div><svg xmlns="http://www.w3.org/2000/svg"><image href="b.png"/></svg>')
+    assemble(payload(['c1.xhtml'], { markImages: true }), [page])
+    const img = doc.querySelector('img')!
+    expect(img.parentElement!.className).toBe('pic')
+    expect(img.style.getPropertyValue('anchor-name')).toBe('--epubtopdf-img-0')
+    const links = [...doc.querySelectorAll('.epubtopdf-image-links a')]
+    expect(links.map((a) => a.getAttribute('href'))).toEqual(['https://epubtopdf.invalid/image/0%3A0'])
+    expect(links[0]!.getAttribute('style')).toContain('position-anchor: --epubtopdf-img-0')
+    // SVG 그림은 SVG 링크로 감싼다.
+    const svgLink = doc.querySelector('svg a')!
+    expect(svgLink.getAttribute('href')).toBe('https://epubtopdf.invalid/image/0%3A1')
+    expect(svgLink.firstElementChild!.localName).toBe('image')
+  })
+
+  it('뺀 그림에는 링크를 만들지 않고, 표시를 끄면 아무것도 넣지 않는다', () => {
+    const page = xhtml('<img src="a.png"/><img src="b.png"/>')
+    assemble(payload(['c1.xhtml'], { markImages: true, hiddenImages: ['0:0'] }), [page])
+    expect([...doc.querySelectorAll('.epubtopdf-image-links a')].map((a) => a.getAttribute('href'))).toEqual([
+      'https://epubtopdf.invalid/image/0%3A1'
+    ])
+    assemble(payload(['c1.xhtml']), [page])
+    expect(doc.querySelector('.epubtopdf-image-links')).toBeNull()
+  })
+})
+
+describe('imageKeyFromUrl', () => {
+  it('미리보기 링크에서 그림 키를 꺼낸다', () => {
+    expect(imageKeyFromUrl(previewImageUrl('3:12'))).toBe('3:12')
+    expect(imageKeyFromUrl('https://example.com/')).toBeUndefined()
+    expect(imageKeyFromUrl(undefined)).toBeUndefined()
   })
 })
