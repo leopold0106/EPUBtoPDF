@@ -25,6 +25,7 @@ let win: Page
 const events: string[] = []
 
 const shot = (name: string): Promise<Buffer> => win.screenshot({ path: join(shots, `${name}.png`) })
+const stepButton = (label: string) => win.locator(`.steps button:has-text("${label}")`)
 
 beforeAll(async () => {
   if (!existsSync(join(root, 'out/main/index.js'))) throw new Error('먼저 npm run build를 실행하세요.')
@@ -74,9 +75,11 @@ async function scrollToFirstImage(): Promise<void> {
 }
 
 describe('앱 화면', () => {
-  it('실행할 때 넘긴 EPUB을 열고 미리보기를 보여준다', async () => {
+  it('실행할 때 넘긴 EPUB을 ① 본문 편집으로 열고, ② 넣을 부분에서 미리보기를 보여준다', async () => {
     await win.locator('.toolbar__file strong').waitFor({ timeout: 20000 })
     expect(await win.textContent('.toolbar__file')).toContain('강가의 기록')
+    await win.locator('.editor__frame').waitFor({ timeout: 20000 })
+    await stepButton('넣을 부분').click()
     await win.locator('.page canvas').first().waitFor({ timeout: 30000 })
     await win.getByText(/책 전체 \d+쪽/).waitFor({ timeout: 30000 })
     await shot('1-preview')
@@ -146,7 +149,7 @@ describe('앱 화면', () => {
   })
 
   it('본문 편집에서 그림 설명을 지우고 새 문단을 넣는다', async () => {
-    await win.getByRole('button', { name: '본문 편집' }).click()
+    await stepButton('본문 편집').click()
     const editor = win.frameLocator('.editor__frame')
     const caption = editor.locator('figcaption')
     await caption.waitFor({ timeout: 20000 })
@@ -165,9 +168,9 @@ describe('앱 화면', () => {
     await win.keyboard.press('Enter')
     await win.keyboard.type('편집기에서 넣은 문단')
     await shot('6-editor')
-    // 저장되기 전에 바로 미리보기로 돌아가도 편집이 남는다.
-    await win.getByRole('button', { name: '미리보기' }).click()
-    await expect.poll(() => win.getByRole('button', { name: /본문 편집/ }).textContent()).toBe('본문 편집 (1)')
+    // 저장되기 전에 바로 다음 단계로 넘어가도 편집이 남는다.
+    await stepButton('넣을 부분').click()
+    await expect.poll(() => stepButton('본문 편집').locator('.step__badge').textContent()).toBe('1개 고침')
     // 편집 내용은 다음에 같은 책을 열 때를 위해 저장된다.
     await expect
       .poll(async () => {
@@ -177,6 +180,29 @@ describe('앱 화면', () => {
       .toContain('편집기에서 넣은 문단')
   })
 
+  it('② 넣을 부분에서 장을 끄면 그 장과 하위 항목이 빠지고 책 전체 쪽수가 준다', async () => {
+    const chapter2 = win.locator('.parts__row:has-text("제2장 시장 골목") .parts__page')
+    await expect.poll(() => chapter2.textContent(), { timeout: 30000 }).toMatch(/쪽$/)
+    const pagesOf = async (): Promise<number> => Number(/책 전체 (\d+)쪽/.exec((await win.textContent('.preview-bar__status')) ?? '')?.[1] ?? NaN)
+    const before = await pagesOf()
+    await win.getByRole('checkbox', { name: '제2장 시장 골목 넣기' }).uncheck()
+    await expect.poll(() => win.textContent('.parts__row:has-text("등불") .parts__page')).toBe('뺌')
+    await expect.poll(() => stepButton('넣을 부분').textContent()).toContain('3개 뺌')
+    await expect.poll(pagesOf, { timeout: 30000 }).toBeLessThan(before)
+    await shot('7-parts')
+  })
+
+  it('③ 쪽 번호: 제1장부터 1쪽으로 매기고 그 앞은 로마 숫자', async () => {
+    await stepButton('쪽 번호').click()
+    await win.getByLabel('1쪽(시작 번호)을 붙일 곳').selectOption({ label: '제1장 강가의 아침' })
+    await win.click('label.choice__option:has-text("로마 숫자")')
+    await stepButton('넣을 부분').click()
+    await expect.poll(() => win.textContent('.parts__row:has-text("제1장 강가의 아침") .parts__page'), { timeout: 30000 }).toBe('1쪽')
+    await expect.poll(() => win.textContent('.parts__row >> nth=0 >> .parts__page')).toBe('i쪽')
+    await stepButton('쪽 번호').click()
+    await shot('8-page-numbers')
+  })
+
   it('PDF로 변환한다', async () => {
     const out = join(dir, 'out.pdf')
     await app.evaluate(({ dialog }, path) => {
@@ -184,16 +210,24 @@ describe('앱 화면', () => {
     }, out)
     await win.click('text=PDF로 변환')
     await win.locator('.message--success').waitFor({ timeout: 60000 })
-    expect(await win.textContent('.message--success')).toMatch(/변환을 마쳤습니다\. \d+쪽 · 책갈피 7개/)
+    // 제2장과 하위 항목 2개를 뺐으므로 책갈피는 7개에서 4개로 준다.
+    expect(await win.textContent('.message--success')).toMatch(/변환을 마쳤습니다\. \d+쪽 · 책갈피 4개/)
     expect(existsSync(out)).toBe(true)
     const pdf = await getDocument({ data: new Uint8Array(await readFile(out)) }).promise
     let text = ''
+    const footers: string[] = []
     for (let n = 1; n <= pdf.numPages; n++) {
-      text += (await (await pdf.getPage(n)).getTextContent()).items.map((i) => (i as TextItem).str).join('')
+      const items = (await (await pdf.getPage(n)).getTextContent()).items as TextItem[]
+      text += items.map((i) => i.str).join('')
+      footers.push(items.filter((i) => (i.transform[5] as number) < 50 && i.str.trim()).map((i) => i.str).join(''))
     }
     text = text.replace(/\s+/g, '')
     expect(text).toContain('편집기에서넣은문단')
     expect(text).not.toContain('그림1.새벽의강')
-    await shot('7-converted')
+    expect(text).not.toContain('제2장시장골목')
+    expect(text).toContain('제3장등대')
+    // 표지는 i, 제1장 첫 쪽부터 1, 2, 3…
+    expect(footers.slice(0, 4)).toEqual(['i', '1', '2', '3'])
+    await shot('9-converted')
   })
 })

@@ -205,18 +205,7 @@ export function SettingsPanel({ settings: s, typography: t, issues, onChange, on
         <Checkbox label="장마다 새 쪽에서 시작" checked={s.layout.chapterBreak} onChange={(v) => onChange({ layout: { chapterBreak: v } })} />
       </Section>
 
-      <Section title="쪽 번호 · 머리글" summary={s.decor.pageNumbers === 'none' ? '쪽 번호 없음' : '쪽 번호 있음'} defaultOpen={false}>
-        <SelectField
-          label="쪽 번호"
-          value={s.decor.pageNumbers}
-          options={[
-            { value: 'none', label: '없음' },
-            { value: 'bottom-center', label: '아래 가운데' },
-            { value: 'bottom-outside', label: '아래 바깥쪽' },
-            { value: 'top-outside', label: '위 바깥쪽' }
-          ]}
-          onChange={(pageNumbers) => onChange({ decor: { pageNumbers } })}
-        />
+      <Section title="머리글" summary={{ none: '없음', bookTitle: '책 제목', chapterTitle: '장 제목' }[s.decor.header]} defaultOpen={false}>
         <SelectField
           label="머리글"
           value={s.decor.header}
@@ -227,6 +216,7 @@ export function SettingsPanel({ settings: s, typography: t, issues, onChange, on
           ]}
           onChange={(header) => onChange({ decor: { header } })}
         />
+        <p className="field__hint">쪽 번호는 위의 「③ 쪽 번호」 단계에서 정합니다.</p>
       </Section>
 
       <Section title="PDF" summary={s.output.bookmarks ? '책갈피 있음' : '책갈피 없음'} defaultOpen={false}>

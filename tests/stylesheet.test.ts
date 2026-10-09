@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Settings } from '@shared/settings'
-import { buildStylesheet, CHAPTER_CLASS, cssString, fontFamilyList, headingGap, paragraphGap } from '@shared/stylesheet'
+import { buildStylesheet, CHAPTER_CLASS, cssString, fontFamilyList, headingGap, pageNumberSheet, paragraphGap } from '@shared/stylesheet'
 import { computeTypography } from '@shared/typography'
 import { makeSettings } from './helpers'
 
@@ -50,16 +50,27 @@ describe('buildStylesheet: 쪽', () => {
     expect(css(makeSettings({ margins: { mirrored: false } }))).not.toContain('@page :left { margin')
   })
 
-  it('쪽 번호 위치', () => {
-    expect(css(makeSettings({ decor: { pageNumbers: 'bottom-center' } }))).toMatch(/@bottom-center \{ content: counter\(page\)/)
-    expect(css(makeSettings({ decor: { pageNumbers: 'none' } }))).not.toContain('counter(page)')
+  it('본문에는 쪽 번호를 찍지 않는다 (번호 문서를 따로 겹친다)', () => {
+    expect(css(makeSettings({ decor: { pageNumbers: 'bottom-center' } }))).not.toContain('counter(page)')
+  })
 
-    const outside = css(makeSettings({ decor: { pageNumbers: 'bottom-outside' }, margins: { mirrored: true } }))
-    expect(outside).toMatch(/@page :left \{ @bottom-left \{ content: counter\(page\)/)
-    expect(outside).toMatch(/@page :right \{ @bottom-right \{ content: counter\(page\)/)
+  it('번호 문서: 쪽마다 이름 붙은 쪽에 그 쪽의 번호를 넣고, 번호가 없는 쪽은 비운다', () => {
+    const sheet = (s: Settings, labels: (string | null)[]): string => pageNumberSheet(s, computeTypography(s), labels)
+    const center = sheet(makeSettings({ decor: { pageNumbers: 'bottom-center' } }), ['i', null, '1'])
+    expect(center).toContain('@page epubtopdf-n0 { @bottom-center { content: "i";')
+    expect(center).not.toContain('epubtopdf-n1')
+    expect(center).toContain('.epubtopdf-number-page:nth-child(3) { page: epubtopdf-n2; }')
+    // 본문과 같은 쪽 크기·여백
+    expect(center).toMatch(/@page \{\n  size: 148mm 210mm;/)
 
-    const single = css(makeSettings({ decor: { pageNumbers: 'top-outside' }, margins: { mirrored: false } }))
-    expect(single).toMatch(/@page \{ @top-right \{ content: counter\(page\)/)
+    const outside = sheet(makeSettings({ decor: { pageNumbers: 'bottom-outside' }, margins: { mirrored: true } }), ['5'])
+    expect(outside).toContain('@page epubtopdf-n0:left { @bottom-left { content: "5";')
+    expect(outside).toContain('@page epubtopdf-n0:right { @bottom-right { content: "5";')
+
+    const single = sheet(makeSettings({ decor: { pageNumbers: 'top-outside' }, margins: { mirrored: false } }), ['5'])
+    expect(single).toContain('@page epubtopdf-n0 { @top-right { content: "5";')
+
+    expect(sheet(makeSettings({ decor: { pageNumbers: 'none' } }), ['1'])).not.toContain('content:')
   })
 
   it('머리글에 책 제목을 이스케이프해서 넣는다', () => {

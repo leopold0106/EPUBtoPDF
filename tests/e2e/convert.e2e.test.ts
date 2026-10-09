@@ -220,6 +220,38 @@ describe('명령줄 변환', () => {
     expect(all).toContain(squash('제3장 등대'))
   })
 
+  it('뺀 부분은 본문과 책갈피에서 빠지고, 쪽 번호는 규칙대로 찍힌다', async () => {
+    const pdf = await convert(
+      'parts-numbers',
+      { decor: { pageNumbers: 'bottom-outside', hideNumberOnChapterStart: true } },
+      {
+        hiddenImages: [],
+        // 제2장과 그 하위 항목
+        excludedParts: ['1', '1.0', '1.1'],
+        pageNumbering: { startAt: '0', startNumber: 1, front: 'roman', hiddenNumbers: [3] }
+      }
+    )
+    const all = (await allText(pdf)).join('')
+    expect(all).not.toContain(squash('제2장 시장 골목'))
+    expect(all).not.toContain(squash('상인이 보여 준 장부'))
+    expect(all).toContain(squash('제3장 등대'))
+    expect((await pdf.getOutline())?.map((o) => o.title)).toEqual(['제1장 강가의 아침', '제3장 등대', '주석'])
+
+    // 아래 여백의 글자 (쪽 번호)와 그 가로 위치
+    const footer = async (n: number): Promise<{ text: string; x?: number }> => {
+      const items = (await pageText(pdf, n)).filter((i) => (i.transform[5] as number) < 15 * MM && i.str.trim())
+      return { text: items.map((i) => i.str).join(''), x: items[0]?.transform[4] as number | undefined }
+    }
+    const width = (await pdf.getPage(1)).view[2]!
+    const footers = await Promise.all([1, 2, 3, 4, 5, 6].map(footer))
+    // 표지 i, 제1장 첫 쪽(장 첫 쪽이라 비움), 2, 3(지울 번호), 4, 5
+    expect(footers.map((f) => f.text)).toEqual(['i', '', '2', '', '4', '5'])
+    // 바깥쪽: 홀수 쪽은 오른쪽, 짝수 쪽은 왼쪽
+    expect(footers[0]!.x!).toBeGreaterThan(width / 2)
+    expect(footers[4]!.x!).toBeGreaterThan(width / 2)
+    expect(footers[5]!.x!).toBeLessThan(width / 2)
+  })
+
   it('잘못된 설정이면 변환하지 않고 종료 코드 2', async () => {
     const settingsPath = join(dir, 'bad.json')
     await writeFile(settingsPath, JSON.stringify({ margins: { topMm: 150, bottomMm: 150 } }))

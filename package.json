@@ -1,7 +1,7 @@
 {
   "name": "epubtopdf",
   "productName": "EPUBtoPDF",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "EPUB 파일을 원하는 조판 설정으로 PDF로 변환하는 데스크톱 앱",
   "main": "./out/main/index.js",
   "author": "leopold0106",

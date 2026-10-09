@@ -30,8 +30,11 @@ export interface AssemblePayload {
    * 링크 주소는 `previewImageUrl(key)`. 최종 PDF에는 쓰지 않는다.
    */
   markImages?: boolean
-  /** 책갈피 표시를 둘 목차 항목. */
-  tocTargets?: TocTarget[]
+  /**
+   * 책의 부분(목차 항목 등). 뺄 부분은 그 자리부터 다음 부분 직전까지 지우고,
+   * 남은 부분과 장마다 쪽 위치를 알기 위한 표시를 둔다.
+   */
+  parts?: PartTarget[]
   /** 본문을 고친 장: 장 위치 → 고친 문서. 있으면 원본 대신 쓴다. */
   chapterOverrides?: Record<number, string>
   /** 인쇄 직전 다듬기 (render/typeset.ts). */
@@ -44,22 +47,30 @@ export interface AssemblePayload {
   }
 }
 
-/** 책갈피를 걸 목차 항목. 인쇄 후 이 표시가 놓인 쪽을 읽어 책갈피를 만든다. */
-export interface TocTarget {
-  /** 목차 항목 번호 (목차를 펼친 순서). */
-  n: number
+/** 책의 한 부분 (shared/parts.ts의 BookPart). 인쇄 후 표시가 놓인 쪽을 읽어 책갈피와 쪽 번호에 쓴다. */
+export interface PartTarget {
+  key: string
+  title: string
   /** `epub://` 주소와 조각 식별자. */
   url: string
+  /** PDF에서 뺀다. */
+  exclude?: boolean
 }
 
-const TOC_MARKER_PREFIX = 'https://epubtopdf.invalid/toc/'
+const MARKER_PREFIX = 'https://epubtopdf.invalid/toc/'
 
-export const tocMarkerUrl = (n: number): string => TOC_MARKER_PREFIX + n
+/** 위치 표시 링크의 주소. 부분은 부분 키, 장(문서) 시작은 `chapterMarkerKey`. */
+export const tocMarkerUrl = (key: string): string => MARKER_PREFIX + encodeURIComponent(key)
 
-export function tocMarkerIndex(url: string | undefined): number | undefined {
-  if (!url?.startsWith(TOC_MARKER_PREFIX)) return undefined
-  const n = Number(url.slice(TOC_MARKER_PREFIX.length))
-  return Number.isInteger(n) ? n : undefined
+export const chapterMarkerKey = (spineIndex: number): string => `@${spineIndex}`
+
+export function tocMarkerKey(url: string | undefined): string | undefined {
+  if (!url?.startsWith(MARKER_PREFIX)) return undefined
+  try {
+    return decodeURIComponent(url.slice(MARKER_PREFIX.length))
+  } catch {
+    return undefined
+  }
 }
 
 const PREVIEW_IMAGE_PREFIX = 'https://epubtopdf.invalid/image/'
@@ -91,7 +102,18 @@ export interface ImageInfo {
   alt: string
 }
 
+/** 쪽 번호만 찍힌 문서를 만들 때 넘기는 값. */
+export interface NumberPagesPayload {
+  /** 쪽 크기·여백과 쪽마다의 번호를 담은 CSS (shared/stylesheet.ts의 pageNumberSheet). */
+  css: string
+  pageCount: number
+  dir?: 'ltr' | 'rtl'
+}
+
 export interface AssembleResult {
+  /** 뺄 부분을 지우고 나니 아무것도 남지 않았다. */
+  empty: boolean
+  excludedPartCount: number
   chapterCount: number
   imageCount: number
   hiddenImageCount: number

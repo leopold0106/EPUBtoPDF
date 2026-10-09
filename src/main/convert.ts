@@ -13,6 +13,9 @@ import type { EpubBook } from './epub/parse'
 import { library } from './epub/library'
 import { listBookImages, renderPdf, type RenderStage } from './render/pdf'
 
+/** 렌더러가 보낸 쪽수 값 (0 이상의 정수만). */
+const count = (v: unknown): number | undefined => (typeof v === 'number' && Number.isInteger(v) && v >= 0 ? v : undefined)
+
 export function settingsErrors(settings: Settings): string[] {
   return validateSettings(settings)
     .filter((i) => i.level === 'error')
@@ -27,6 +30,7 @@ export async function convertBook(
 ): Promise<ConvertResult> {
   const started = Date.now()
   const output = await renderPdf(book, settings, options)
+  if (output.empty) throw new Error('PDF에 넣을 부분이 없습니다. 「넣을 부분」에서 하나 이상 넣어 주세요.')
   await writeFile(outputPath, output.pdf)
   return {
     path: outputPath,
@@ -69,13 +73,21 @@ export function registerConvertIpc(): void {
         const output = await renderPdf(book, settings, {
           chapters: chapters?.length ? chapters : undefined,
           edits: normalizeEdits(rawEdits),
-          markImages: !request.countOnly
+          markImages: !request.countOnly,
+          pageOffset: count(request.pageOffset),
+          numberStartPage: count(request.numberStartPage),
+          bookPageCount: count(request.bookPageCount)
         })
         return {
           ok: true,
           value: {
-            pdf: request.countOnly ? undefined : output.pdf,
+            pdf: request.countOnly || output.empty ? undefined : output.pdf,
             pageCount: output.pageCount,
+            empty: output.empty,
+            partPages: output.partPages,
+            chapterPages: output.chapterPages,
+            numberStartPage: output.numberStartPage,
+            pageLabels: output.pageLabels,
             warnings: output.warnings,
             ms: Date.now() - started
           }
