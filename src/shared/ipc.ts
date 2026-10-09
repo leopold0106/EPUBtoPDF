@@ -56,11 +56,28 @@ export interface PreviewRequest {
   chapters?: number[]
   /** 쪽수만 필요할 때 (PDF는 돌려주지 않는다). */
   countOnly?: boolean
+  /**
+   * 장 하나만 볼 때 쪽 번호를 책 전체 기준으로 매기기 위한 값 (책 전체를 센 결과).
+   * pageOffset: 이 장 앞의 쪽 수, numberStartPage: 본문 번호가 시작하는 쪽, bookPageCount: 책 전체 쪽수.
+   */
+  pageOffset?: number
+  numberStartPage?: number
+  bookPageCount?: number
 }
 
 export interface PreviewResult {
   pdf?: Uint8Array
   pageCount: number
+  /** 뺄 부분을 빼고 나니 남은 것이 없다. */
+  empty: boolean
+  /** 부분 키 → 시작 쪽 (책 전체에서 몇 번째 쪽인지). 남은 부분만. */
+  partPages: Record<string, number>
+  /** 장(spine 위치) → 시작 쪽. */
+  chapterPages: Record<number, number>
+  /** 본문 번호가 시작하는 쪽. */
+  numberStartPage: number
+  /** 쪽마다 찍은 번호 (쪽 번호를 찍지 않으면 없음). */
+  pageLabels?: (string | null)[]
   warnings: string[]
   ms: number
 }

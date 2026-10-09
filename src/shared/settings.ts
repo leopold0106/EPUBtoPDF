@@ -68,8 +68,14 @@ export interface LayoutSettings {
 
 export type PageNumberPosition = 'none' | 'bottom-center' | 'bottom-outside' | 'top-outside'
 
+/** 쪽 번호 모양: `12`, `- 12 -`, `12 / 120`. */
+export type PageNumberStyle = 'plain' | 'dashed' | 'total'
+
 export interface DecorSettings {
   pageNumbers: PageNumberPosition
+  pageNumberStyle: PageNumberStyle
+  /** 장이 시작하는 쪽에는 쪽 번호를 찍지 않는다. */
+  hideNumberOnChapterStart: boolean
   /** 쪽 위 가운데에 표시할 머리글. 장 제목은 목차에서 가져온다. */
   header: 'none' | 'bookTitle' | 'chapterTitle'
 }
@@ -108,7 +114,7 @@ export const DEFAULT_SETTINGS: Settings = {
     snapToGrid: true
   },
   layout: { epubStyles: 'keep', chapterBreak: true },
-  decor: { pageNumbers: 'bottom-center', header: 'none' },
+  decor: { pageNumbers: 'bottom-center', pageNumberStyle: 'plain', hideNumberOnChapterStart: false, header: 'none' },
   output: { bookmarks: true }
 }
 
@@ -241,6 +247,8 @@ export function normalizeSettings(input: unknown): Settings {
         ['none', 'bottom-center', 'bottom-outside', 'top-outside'],
         d.decor.pageNumbers
       ),
+      pageNumberStyle: oneOf(decor.pageNumberStyle, ['plain', 'dashed', 'total'], d.decor.pageNumberStyle),
+      hideNumberOnChapterStart: bool(decor.hideNumberOnChapterStart, d.decor.hideNumberOnChapterStart),
       header: oneOf(decor.header, ['none', 'bookTitle', 'chapterTitle'], d.decor.header)
     },
     output: {

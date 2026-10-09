@@ -10,8 +10,10 @@ import {
   type AssemblePayload,
   type AssembleResult,
   type ImageInfo,
-  type ListImagesPayload
+  type ListImagesPayload,
+  type NumberPagesPayload
 } from '@shared/render'
+import { NUMBER_PAGE_CLASS } from '@shared/stylesheet'
 import { decodeText } from '@shared/text'
 import { assembleBook, listImages as findImages, waitForResources } from '../render/assemble'
 import { typeset } from '../render/typeset'
@@ -43,4 +45,21 @@ async function listImages(payload: ListImagesPayload): Promise<ImageInfo[]> {
   return findImages(payload, await readChapters(payload.chapters, payload.chapterOverrides), new DOMParser())
 }
 
-contextBridge.exposeInMainWorld(RENDER_API_NAME, { assemble, listImages })
+/** 본문을 인쇄한 뒤, 같은 창을 쪽 번호만 찍힌 빈 쪽들로 바꾼다. */
+async function numberPages(payload: NumberPagesPayload): Promise<void> {
+  for (const el of document.head.querySelectorAll('style, link')) el.remove()
+  const body = document.createElement('body')
+  for (let i = 0; i < payload.pageCount; i++) {
+    const page = document.createElement('div')
+    page.className = NUMBER_PAGE_CLASS
+    body.appendChild(page)
+  }
+  document.body.replaceWith(body)
+  if (payload.dir) document.documentElement.setAttribute('dir', payload.dir)
+  const style = document.createElement('style')
+  style.textContent = payload.css
+  document.head.appendChild(style)
+  await document.fonts.ready
+}
+
+contextBridge.exposeInMainWorld(RENDER_API_NAME, { assemble, listImages, numberPages })

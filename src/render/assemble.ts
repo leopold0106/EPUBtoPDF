@@ -11,7 +11,16 @@
  */
 
 import { imageKey } from '@shared/edits'
-import { previewImageUrl, tocMarkerUrl, type AssemblePayload, type AssembleResult, type ImageInfo, type ListImagesPayload } from '@shared/render'
+import {
+  chapterMarkerKey,
+  previewImageUrl,
+  tocMarkerUrl,
+  type AssemblePayload,
+  type AssembleResult,
+  type ImageInfo,
+  type ListImagesPayload,
+  type PartTarget
+} from '@shared/render'
 import { chapterAnchorId, CHAPTER_CLASS } from '@shared/stylesheet'
 
 const XHTML_NS = 'http://www.w3.org/1999/xhtml'
@@ -347,8 +356,11 @@ export function assembleBook(
     doc.body.appendChild(section)
   }
 
+  const excludedPartCount = payload.parts?.some((p) => p.exclude) ? excludeParts(doc, payload.parts, book, warnings) : 0
+  const empty = !doc.body.querySelector(`.${CHAPTER_CLASS}`)
+
   if (payload.markImages) markImages(doc)
-  if (payload.tocTargets?.length) markTocTargets(doc, payload, book)
+  if (payload.parts) markParts(doc, payload.parts, book)
 
   // `body.chapter p` 같은 원본 규칙이 맞도록 장들의 body 클래스를 문서 body에도 붙인다.
   if (keep) for (const cls of bodyClasses) doc.body.classList.add(cls)
@@ -361,7 +373,7 @@ export function assembleBook(
   }
   style.textContent = payload.userCss
 
-  return { chapterCount: parsed.length, imageCount, hiddenImageCount, warnings }
+  return { empty, excludedPartCount, chapterCount: parsed.length, imageCount, hiddenImageCount, warnings }
 }
 
 function isEmptyChapter(section: Element): boolean {
@@ -420,27 +432,106 @@ function addAnchorName(el: HTMLElement, name: string): void {
   el.style.setProperty('anchor-name', current && current !== 'none' ? `${current}, ${name}` : name)
 }
 
+/** 부분이 시작하는 요소. 조각 식별자가 가리키는 요소를 찾지 못하면 found가 false. */
+function partElement(doc: Document, target: PartTarget, book: BookContext): { el: Element; section: Element; found: boolean } | undefined {
+  const url = tryUrl(target.url, 'epub://invalid/')
+  const index = url && book.spineIndex.get(documentKey(url))
+  const chapter = index === undefined ? undefined : book.rendered.get(index)
+  const section = chapter && doc.getElementById(chapterAnchorId(chapter.index))
+  if (!url || !chapter || !section) return undefined
+  const fragment = decodeFragment(url.hash)
+  if (!fragment) return { el: section, section, found: true }
+  const el = doc.getElementById(chapter.ids.get(fragment) ?? fragment)
+  return el && section.contains(el) ? { el, section, found: true } : { el: section, section, found: false }
+}
+
+/** 공백·주석이 아닌 앞 형제가 없는가 (부모의 첫 내용인가). */
+function isFirstContent(node: Node): boolean {
+  for (let sib = node.previousSibling; sib; sib = sib.previousSibling) {
+    if (sib.nodeType === 8) continue
+    if (sib.nodeType === 3 && !(sib.textContent ?? '').trim()) continue
+    return false
+  }
+  return true
+}
+
 /**
- * 목차 항목이 가리키는 곳 맨 위에 1px짜리 링크를 둔다. 인쇄한 뒤 이 링크가 놓인 쪽과 높이를 읽어
- * 책갈피를 만들고, 링크는 지운다 (render/postprocess.ts).
+ * 부분의 시작점. 제목 안의 `<a id>`처럼 블록 맨 앞에 붙은 요소면 그 블록부터 시작하도록 위로 올라간다.
+ * 장의 맨 앞이면 장(section) 전체가 시작점이다.
  */
-function markTocTargets(doc: Document, payload: AssemblePayload, book: BookContext): void {
+function startBoundary(el: Element, section: Element): Element {
+  let node = el
+  while (node !== section && node.parentElement && isFirstContent(node)) node = node.parentElement
+  return node
+}
+
+/**
+ * 뺄 부분을 지운다: 부분이 시작하는 곳부터 다음 부분이 시작하기 직전까지.
+ * 시작점이 같은 부분이 여럿이면 뒤의 부분(보통 하위 항목)이 내용을 가진다. 지운 부분 수를 돌려준다.
+ */
+function excludeParts(doc: Document, parts: PartTarget[], book: BookContext, warnings: string[]): number {
+  const starts: { node: Element; exclude: boolean }[] = []
+  for (const part of parts) {
+    const found = partElement(doc, part, book)
+    if (!found) continue
+    if (!found.found) {
+      // 가리키는 곳을 모르면 이 부분에는 내용이 없는 것으로 본다 (앞 부분에 붙는다).
+      if (part.exclude) warnings.push(`목차 항목 "${part.title}"이(가) 가리키는 곳을 찾지 못해 이 부분은 빼지 못했습니다.`)
+      continue
+    }
+    starts.push({ node: startBoundary(found.el, found.section), exclude: !!part.exclude })
+  }
+  // 문서 순서대로 (같은 자리면 원래 순서).
+  const ordered = starts
+    .map((s, i) => ({ ...s, i }))
+    .sort((a, b) => {
+      if (a.node === b.node) return a.i - b.i
+      return a.node.compareDocumentPosition(b.node) & 4 /* FOLLOWING */ ? -1 : 1
+    })
+
+  const ranges: Range[] = []
+  ordered.forEach((s, i) => {
+    if (!s.exclude) return
+    const range = doc.createRange()
+    range.setStartBefore(s.node)
+    const next = ordered[i + 1]
+    if (next) range.setEndBefore(next.node)
+    else range.setEnd(doc.body, doc.body.childNodes.length)
+    ranges.push(range)
+  })
+  // 범위는 문서가 바뀌면 따라 움직이므로 미리 다 만든 뒤 지운다.
+  for (const range of ranges) range.deleteContents()
+
+  // 내용이 다 빠진 장은 빈 쪽이 생기지 않게 없앤다.
+  for (const section of doc.body.querySelectorAll(`:scope > .${CHAPTER_CLASS}`)) {
+    if (isEmptyChapter(section)) section.remove()
+  }
+  return ranges.length
+}
+
+/**
+ * 남은 부분과 장(문서)마다 맨 위에 1px짜리 링크를 둔다. 인쇄한 뒤 이 링크가 놓인 쪽과 높이를 읽어
+ * 책갈피·쪽 번호·목차의 쪽 표시에 쓰고, 링크는 지운다 (main/render/postprocess.ts).
+ */
+function markParts(doc: Document, parts: PartTarget[], book: BookContext): void {
   const layer = markerLayer(doc, 'epubtopdf-toc-links')
-  for (const target of payload.tocTargets ?? []) {
-    const url = tryUrl(target.url, 'epub://invalid/')
-    const index = url && book.spineIndex.get(documentKey(url))
-    const chapter = index === undefined ? undefined : book.rendered.get(index)
-    if (!url || !chapter) continue
-    const fragment = decodeFragment(url.hash)
-    const el =
-      (fragment ? doc.getElementById(chapter.ids.get(fragment) ?? fragment) : null) ?? doc.getElementById(chapterAnchorId(chapter.index))
-    if (!(el instanceof HTMLElement)) continue
-    const anchor = `--epubtopdf-toc-${target.n}`
+  let n = 0
+  const mark = (el: Element, key: string): void => {
+    if (!(el instanceof HTMLElement)) return
+    const anchor = `--epubtopdf-toc-${n++}`
     addAnchorName(el, anchor)
     const link = doc.createElement('a')
-    link.href = tocMarkerUrl(target.n)
+    link.href = tocMarkerUrl(key)
     link.setAttribute('style', `position: absolute; position-anchor: ${anchor}; top: anchor(top); left: anchor(left); width: 1px; height: 1px;`)
     layer.appendChild(link)
+  }
+  for (const part of parts) {
+    if (part.exclude) continue
+    const found = partElement(doc, part, book)
+    if (found) mark(found.el, part.key)
+  }
+  for (const section of doc.body.querySelectorAll(`:scope > .${CHAPTER_CLASS}`)) {
+    mark(section, chapterMarkerKey(Number((section as HTMLElement).dataset['spineIndex'])))
   }
   if (layer.childElementCount > 0) doc.body.appendChild(layer)
 }

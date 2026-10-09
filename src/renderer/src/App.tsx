@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { BookSummary } from '@shared/book'
 import { hasEdits, type BookEdits } from '@shared/edits'
+import { DEFAULT_PAGE_NUMBERING, isDefaultPageNumbering, type PageNumbering } from '@shared/page-numbers'
+import { buildParts, flattenParts, spineLabel } from '@shared/parts'
 import { KOREAN_FONT_NAMES } from '@shared/font-names'
 import type { UserFont } from '@shared/fonts'
 import type { AppInfo, ConvertProgress, ConvertResult, Result } from '@shared/ipc'
@@ -9,6 +11,8 @@ import { DEFAULT_SETTINGS } from '@shared/settings'
 import { computeTypography, validateSettings } from '@shared/typography'
 import { EditorPane } from './components/EditorPane'
 import { ImagePanel } from './components/ImagePanel'
+import { PageNumberPanel } from './components/PageNumberPanel'
+import { PartsPanel } from './components/PartsPanel'
 import { PreviewPane } from './components/PreviewPane'
 import { FontExtras } from './components/FontExtras'
 import type { FontOption } from './components/FontPicker'
@@ -52,8 +56,14 @@ function buildFontOptions(user: UserFont[], system: string[] | null): FontOption
 
 type SidebarTab = 'settings' | 'images'
 
-/** 가운데 화면: 변환 결과 미리보기 또는 본문 편집. */
-type ViewMode = 'preview' | 'edit'
+/** 작업 단계: ① 본문 편집 → ② 넣을 부분 → ③ 쪽 번호. 단계 사이는 자유롭게 오갈 수 있다. */
+type Step = 1 | 2 | 3
+
+const STEPS: { step: Step; label: string }[] = [
+  { step: 1, label: '본문 편집' },
+  { step: 2, label: '넣을 부분' },
+  { step: 3, label: '쪽 번호' }
+]
 
 /** 미리보기 범위: 장 하나(spine 위치) 또는 책 전체. */
 type PreviewScope = number | 'all'
@@ -63,12 +73,6 @@ const ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2]
 /** 처음 미리 볼 장: 목차에 있는 첫 본문 문서. */
 function firstChapter(book: BookSummary): number {
   return book.spine.find((s) => s.title !== undefined && s.linear)?.index ?? 0
-}
-
-function spineLabel(book: BookSummary, index: number): string {
-  const s = book.spine[index]
-  if (s?.title) return s.title
-  return index === 0 && book.coverPath ? '표지' : `문서 ${index + 1}`
 }
 
 const isTyping = (target: EventTarget | null): boolean =>
@@ -93,7 +97,9 @@ export default function App(): React.JSX.Element {
   const [zoom, setZoom] = useState(1)
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const [lineCounts, setLineCounts] = useState<Map<number, number>>(new Map())
-  const [mode, setMode] = useState<ViewMode>('preview')
+  const [step, setStep] = useState<Step>(1)
+  const [excludedParts, setExcludedParts] = useState<ReadonlySet<string>>(new Set())
+  const [pageNumbering, setPageNumbering] = useState<PageNumbering>(DEFAULT_PAGE_NUMBERING)
   const [chapterEdits, setChapterEdits] = useState<Record<number, string>>({})
   /** 저장된 편집을 다 불러온 책. 불러오기 전에는 저장하지 않는다 (빈 편집으로 덮어쓰지 않게). */
   const [editsBookId, setEditsBookId] = useState<string | null>(null)
@@ -109,23 +115,47 @@ export default function App(): React.JSX.Element {
   const edits = useMemo<BookEdits>(
     () => ({
       hiddenImages: [...hiddenImages].sort(),
-      ...(Object.keys(chapterEdits).length > 0 && { chapters: chapterEdits })
+      ...(Object.keys(chapterEdits).length > 0 && { chapters: chapterEdits }),
+      ...(excludedParts.size > 0 && { excludedParts: [...excludedParts].sort() }),
+      ...(!isDefaultPageNumbering(pageNumbering) && { pageNumbering })
     }),
-    [hiddenImages, chapterEdits]
+    [hiddenImages, chapterEdits, excludedParts, pageNumbering]
   )
   const editedCount = Object.keys(chapterEdits).length
-  const previewRequest = useMemo(() => (scope === 'all' ? {} : { chapters: [scope] }), [scope])
-  const preview = usePreview({ bookId: book?.id ?? null, settings, edits, request: previewRequest, enabled: !hasErrors, delayMs: 300 })
-  // 장 하나만 보고 있을 때는 책 전체 쪽수를 뒤에서 따로 센다.
+  const parts = useMemo(() => (book ? buildParts(book.toc, book.spine, book.coverPath) : []), [book])
+  const allExcluded = parts.length > 0 && flattenParts(parts).every((p) => p.spineIndex < 0 || excludedParts.has(p.key))
+
+  // 미리보기는 ②·③ 단계에서만 만든다. 장 하나만 볼 때는 책 전체를 뒤에서 따로 세어
+  // 책 전체 쪽수와, 그 장의 쪽 번호를 책 전체 기준으로 매기는 데 쓴다.
+  const previewing = step !== 1 && !hasErrors
   const total = usePreview({
     bookId: scope === 'all' ? null : (book?.id ?? null),
     settings,
     edits,
     request: { countOnly: true },
-    enabled: !hasErrors,
+    enabled: previewing,
     delayMs: 1200
   })
-  const totalPages = scope === 'all' ? preview.result?.pageCount : total.result?.pageCount
+  const totalResult = total.result
+  const chapterStart = typeof scope === 'number' ? totalResult?.chapterPages[scope] : undefined
+  const previewRequest = useMemo(
+    () =>
+      scope === 'all'
+        ? {}
+        : {
+            chapters: [scope],
+            ...(totalResult &&
+              chapterStart !== undefined && {
+                pageOffset: chapterStart - 1,
+                numberStartPage: totalResult.numberStartPage,
+                bookPageCount: totalResult.pageCount
+              })
+          },
+    [scope, totalResult, chapterStart]
+  )
+  const preview = usePreview({ bookId: book?.id ?? null, settings, edits, request: previewRequest, enabled: previewing, delayMs: 300 })
+  const whole = scope === 'all' ? preview.result : totalResult
+  const totalPages = whole?.pageCount
   const maxLines = Math.max(0, ...lineCounts.values())
 
   const hideImage = useCallback(
@@ -171,9 +201,12 @@ export default function App(): React.JSX.Element {
       setConverted(null)
       hidden.reset(new Set())
       setChapterEdits({})
+      setExcludedParts(new Set())
+      setPageNumbering(DEFAULT_PAGE_NUMBERING)
       setEditsBookId(null)
       setRestored(false)
       setSelectedImage(null)
+      setStep(1)
       setScope(firstChapter(result.value))
       // 이 책을 전에 고친 적이 있으면 그 편집을 이어서 쓴다.
       const opened = result.value
@@ -181,6 +214,8 @@ export default function App(): React.JSX.Element {
       if (saved && hasEdits(saved)) {
         hidden.reset(new Set(saved.hiddenImages))
         setChapterEdits(saved.chapters ?? {})
+        setExcludedParts(new Set(saved.excludedParts ?? []))
+        setPageNumbering(saved.pageNumbering ?? DEFAULT_PAGE_NUMBERING)
         setRestored(true)
       }
       setEditsBookId(opened.id)
@@ -248,11 +283,12 @@ export default function App(): React.JSX.Element {
   }, [])
 
   function clearAllEdits(): void {
-    if (!window.confirm('빼 둔 그림과 고친 본문을 모두 원래대로 되돌릴까요?')) return
+    if (!window.confirm('빼 둔 그림, 고친 본문, 넣을 부분, 쪽 번호 규칙을 모두 처음대로 되돌릴까요?')) return
     hidden.reset(new Set())
     setChapterEdits({})
+    setExcludedParts(new Set())
+    setPageNumbering(DEFAULT_PAGE_NUMBERING)
     setRestored(false)
-    setMode('preview')
   }
 
   async function openDialog(): Promise<void> {
@@ -328,13 +364,25 @@ export default function App(): React.JSX.Element {
             'EPUB 파일을 열거나 이 창에 끌어다 놓으세요'
           )}
         </span>
+        {book && (
+          <nav className="steps" aria-label="작업 단계">
+            {STEPS.map(({ step: n, label }) => (
+              <button key={n} type="button" className={`step${step === n ? ' step--on' : ''}`} aria-current={step === n ? 'step' : undefined} onClick={() => setStep(n)}>
+                <span className="step__n">{n}</span>
+                {label}
+                {n === 1 && editedCount > 0 && <span className="step__badge">{editedCount}개 고침</span>}
+                {n === 2 && excludedParts.size > 0 && <span className="step__badge">{excludedParts.size}개 뺌</span>}
+              </button>
+            ))}
+          </nav>
+        )}
         {converting && converting !== 'waiting' && <span className="toolbar__progress">{STAGE_LABELS[converting]}</span>}
         <button
           type="button"
           className="primary"
           onClick={() => void convert()}
-          disabled={!book || busy || hasErrors}
-          title={hasErrors ? '설정 오류를 먼저 고쳐 주세요' : undefined}
+          disabled={!book || busy || hasErrors || allExcluded}
+          title={hasErrors ? '설정 오류를 먼저 고쳐 주세요' : allExcluded ? 'PDF에 넣을 부분이 없습니다' : undefined}
         >
           PDF로 변환
         </button>
@@ -419,22 +467,13 @@ export default function App(): React.JSX.Element {
           {book ? (
             <>
               <div className="preview-bar">
-                <span className="segmented" role="group" aria-label="보기">
-                  <button type="button" className={mode === 'preview' ? 'toggle toggle--on' : 'toggle'} aria-pressed={mode === 'preview'} onClick={() => setMode('preview')}>
-                    미리보기
-                  </button>
-                  <button type="button" className={mode === 'edit' ? 'toggle toggle--on' : 'toggle'} aria-pressed={mode === 'edit'} onClick={() => setMode('edit')}>
-                    본문 편집{editedCount > 0 && ` (${editedCount})`}
-                  </button>
-                </span>
-                <span className="preview-bar__sep" />
                 <button type="button" title="이전 문서" disabled={scope === 'all' || scope <= 0} onClick={() => typeof scope === 'number' && setScope(scope - 1)}>
                   ◀
                 </button>
                 <select value={String(scope)} onChange={(e) => setScope(e.target.value === 'all' ? 'all' : Number(e.target.value))} aria-label="미리 볼 범위">
                   {book.spine.map((s) => (
                     <option key={s.index} value={s.index}>
-                      {spineLabel(book, s.index)}
+                      {spineLabel(book.spine, s.index, book.coverPath)}
                     </option>
                   ))}
                   <option value="all">책 전체</option>
@@ -442,7 +481,7 @@ export default function App(): React.JSX.Element {
                 <button type="button" title="다음 문서" disabled={scope === 'all' || scope >= book.spine.length - 1} onClick={() => typeof scope === 'number' && setScope(scope + 1)}>
                   ▶
                 </button>
-                {mode === 'preview' && (
+                {step !== 1 && (
                   <>
                     <span className="preview-bar__sep" />
                     <button type="button" className={spread ? 'toggle toggle--on' : 'toggle'} onClick={() => setSpread(!spread)} title="펼침면으로 보기">
@@ -467,7 +506,7 @@ export default function App(): React.JSX.Element {
                     </span>
                   </>
                 )}
-                <span className="preview-bar__undo" hidden={mode === 'edit'}>
+                <span className="preview-bar__undo" hidden={step === 1}>
                   <button type="button" onClick={hidden.undo} disabled={!hidden.canUndo} title="되돌리기 (Ctrl+Z)">
                     ↶
                   </button>
@@ -489,7 +528,8 @@ export default function App(): React.JSX.Element {
               {restored && (
                 <div className="message message--info">
                   <span>
-                    이 책을 전에 고친 내용(빼 둔 그림 {hiddenImages.size}개, 고친 문서 {editedCount}개)을 불러왔습니다.
+                    이 책을 전에 고친 내용(빼 둔 그림 {hiddenImages.size}개, 고친 문서 {editedCount}개, 뺀 부분 {excludedParts.size}개
+                    {!isDefaultPageNumbering(pageNumbering) && ', 쪽 번호 규칙'})을 불러왔습니다.
                   </span>
                   <button type="button" className="link" onClick={clearAllEdits}>
                     편집 모두 지우기
@@ -499,23 +539,51 @@ export default function App(): React.JSX.Element {
                   </button>
                 </div>
               )}
-              {mode === 'edit' ? (
+              {step === 1 ? (
                 <EditorPane key={`${book.id}:${editIndex}`} book={book} index={editIndex} edited={chapterEdits[editIndex]} onChange={setChapter} />
               ) : (
-                <>
-                {preview.error && <p className="message message--error">{preview.error}</p>}
-                {hasErrors && <p className="message message--error">설정 오류를 고치면 미리보기가 다시 나옵니다.</p>}
-                <PreviewPane
-                  pdf={preview.result?.pdf ?? null}
-                  spread={spread}
-                  zoom={zoom}
-                  marginsMm={{ top: settings.margins.topMm, bottom: settings.margins.bottomMm }}
-                  selectedImage={selectedImage}
-                  onSelectImage={setSelectedImage}
-                  onHideImage={hideImage}
-                  onMeasure={setLineCounts}
-                />
-                </>
+                <div className="stage">
+                  <aside className="stage__panel">
+                    {step === 2 ? (
+                      <PartsPanel
+                        parts={parts}
+                        excluded={excludedParts}
+                        onChange={setExcludedParts}
+                        pages={whole?.partPages}
+                        labels={whole?.pageLabels}
+                        onJump={(index) => setScope(index)}
+                      />
+                    ) : (
+                      <PageNumberPanel
+                        decor={settings.decor}
+                        onDecor={(decor) => update({ decor })}
+                        numbering={pageNumbering}
+                        onNumbering={setPageNumbering}
+                        parts={parts}
+                        excluded={excludedParts}
+                      />
+                    )}
+                  </aside>
+                  <div className="stage__preview">
+                    {preview.error && <p className="message message--error">{preview.error}</p>}
+                    {hasErrors && <p className="message message--error">설정 오류를 고치면 미리보기가 다시 나옵니다.</p>}
+                    {preview.result?.empty && (
+                      <p className="message message--info">
+                        <span>{scope === 'all' ? 'PDF에 넣을 부분이 없습니다.' : '이 문서는 모두 PDF에서 빠집니다.'}</span>
+                      </p>
+                    )}
+                    <PreviewPane
+                      pdf={preview.result?.pdf ?? null}
+                      spread={spread}
+                      zoom={zoom}
+                      marginsMm={{ top: settings.margins.topMm, bottom: settings.margins.bottomMm }}
+                      selectedImage={selectedImage}
+                      onSelectImage={setSelectedImage}
+                      onHideImage={hideImage}
+                      onMeasure={setLineCounts}
+                    />
+                  </div>
+                </div>
               )}
             </>
           ) : (

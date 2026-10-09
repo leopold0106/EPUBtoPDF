@@ -67,26 +67,35 @@ const px = (v: number): string => `${cssNumber(v)}px`
 const pt = (v: number): string => `${cssNumber(v)}pt`
 const mm = (v: number): string => `${cssNumber(v)}mm`
 
-function pageRules(s: Settings, t: Typography, ctx: StylesheetContext): string[] {
+const decorFontOf = (s: Settings, t: Typography): string =>
+  `font-family: ${fontFamilyList(s)}; font-size: ${pt(Math.min(t.fontSizePt * 0.85, 10))}; color: #555;`
+
+/** 쪽 크기와 여백 (양면이면 왼쪽·오른쪽 쪽의 여백을 뒤집는다). */
+function pageBoxRules(s: Settings, t: Typography, extra = ''): string[] {
   const m = s.margins
-  const rules: string[] = []
-  const decorFont = `font-family: ${fontFamilyList(s)}; font-size: ${pt(Math.min(t.fontSizePt * 0.85, 10))}; color: #555;`
+  const rules = [
+    `@page {`,
+    `  size: ${mm(t.pageWidthMm)} ${mm(t.pageHeightMm)};`,
+    `  margin: ${mm(m.topMm)} ${mm(m.outsideMm)} ${mm(m.bottomMm)} ${mm(m.insideMm)};`,
+    extra && `  ${extra}`,
+    `}`
+  ]
+  if (m.mirrored) {
+    // 펼침면의 왼쪽(짝수) 쪽은 제본이 오른쪽에 온다.
+    rules.push(`@page :left { margin-left: ${mm(m.outsideMm)}; margin-right: ${mm(m.insideMm)}; }`)
+    rules.push(`@page :right { margin-left: ${mm(m.insideMm)}; margin-right: ${mm(m.outsideMm)}; }`)
+  }
+  return rules.filter(Boolean)
+}
+
+/** 쪽 번호는 본문과 따로 찍으므로(pageNumberSheet) 여기서는 쪽 크기·여백·머리글만 정한다. */
+function pageRules(s: Settings, t: Typography, ctx: StylesheetContext): string[] {
+  const decorFont = decorFontOf(s, t)
   const header =
     s.decor.header === 'bookTitle' && ctx.bookTitle
       ? `@top-center { content: ${cssString(ctx.bookTitle)}; ${decorFont} }`
       : ''
-
-  const pn = s.decor.pageNumbers
-  const numberBox = (box: string): string => `@${box} { content: counter(page); ${decorFont} }`
-
-  rules.push(
-    `@page {`,
-    `  size: ${mm(t.pageWidthMm)} ${mm(t.pageHeightMm)};`,
-    `  margin: ${mm(m.topMm)} ${mm(m.outsideMm)} ${mm(m.bottomMm)} ${mm(m.insideMm)};`,
-    header && `  ${header}`,
-    pn === 'bottom-center' ? `  ${numberBox('bottom-center')}` : '',
-    `}`
-  )
+  const rules = pageBoxRules(s, t, header)
 
   // 장 제목 머리글: 장마다 이름 붙은 쪽(named page)을 쓰고 그 쪽의 머리글에 제목을 넣는다.
   // 이름이 바뀌는 곳에서는 항상 새 쪽이 시작된다.
@@ -98,23 +107,46 @@ function pageRules(s: Settings, t: Typography, ctx: StylesheetContext): string[]
     }
   }
 
-  if (s.margins.mirrored) {
-    // 펼침면의 왼쪽(짝수) 쪽은 제본이 오른쪽에 온다.
-    rules.push(`@page :left { margin-left: ${mm(m.outsideMm)}; margin-right: ${mm(m.insideMm)}; }`)
-    rules.push(`@page :right { margin-left: ${mm(m.insideMm)}; margin-right: ${mm(m.outsideMm)}; }`)
-  }
-
-  if (pn === 'bottom-outside' || pn === 'top-outside') {
-    const v = pn === 'bottom-outside' ? 'bottom' : 'top'
-    if (s.margins.mirrored) {
-      rules.push(`@page :left { ${numberBox(`${v}-left`)} }`)
-      rules.push(`@page :right { ${numberBox(`${v}-right`)} }`)
-    } else {
-      rules.push(`@page { ${numberBox(`${v}-right`)} }`)
-    }
-  }
-
   return rules.filter(Boolean)
+}
+
+/** 쪽 번호만 찍을 문서의 쪽 하나. */
+export const NUMBER_PAGE_CLASS = 'epubtopdf-number-page'
+
+/**
+ * 쪽 번호만 찍힌 문서의 CSS. 본문과 같은 쪽 크기·여백으로 빈 쪽을 만들고, 쪽마다 이름 붙은 쪽에
+ * 그 쪽의 번호를 넣는다. 인쇄한 뒤 본문 PDF 위에 겹친다.
+ * `labels[i]`는 i번째 쪽(0부터)에 찍을 글자. null이면 찍지 않는다.
+ */
+export function pageNumberSheet(s: Settings, t: Typography, labels: (string | null)[], ctx: StylesheetContext = {}): string {
+  const out: string[] = []
+  for (const face of ctx.fontFaces ?? []) {
+    out.push(
+      `@font-face { font-family: ${cssString(face.family)}; src: url(${cssString(face.url)});` +
+        ` font-weight: ${face.weight ?? 'normal'}; font-style: ${face.style ?? 'normal'}; }`
+    )
+  }
+  out.push(...pageBoxRules(s, t))
+  out.push(
+    `html, body { margin: 0; padding: 0; background: transparent; }`,
+    `.${NUMBER_PAGE_CLASS} { height: 1px; }`,
+    `.${NUMBER_PAGE_CLASS}:not(:last-child) { break-after: page; }`
+  )
+  const pn = s.decor.pageNumbers
+  if (pn === 'none') return out.join('\n')
+  const font = decorFontOf(s, t)
+  const v = pn === 'top-outside' ? 'top' : 'bottom'
+  labels.forEach((label, i) => {
+    if (label === null) return
+    const name = `epubtopdf-n${i}`
+    const box = (where: string): string => `@${where} { content: ${cssString(label)}; ${font} }`
+    out.push(`.${NUMBER_PAGE_CLASS}:nth-child(${i + 1}) { page: ${name}; }`)
+    if (pn === 'bottom-center') out.push(`@page ${name} { ${box('bottom-center')} }`)
+    else if (s.margins.mirrored) {
+      out.push(`@page ${name}:left { ${box(`${v}-left`)} }`, `@page ${name}:right { ${box(`${v}-right`)} }`)
+    } else out.push(`@page ${name} { ${box(`${v}-right`)} }`)
+  })
+  return out.join('\n')
 }
 
 /** `ignore` 모드에서 원본 CSS 대신 쓰는 기본 스타일. 위아래 간격은 buildStylesheet가 정한다. */
